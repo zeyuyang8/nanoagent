@@ -1,0 +1,102 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nanoagent"
+# One source of truth: nanoagent.__version__ (see [tool.setuptools.dynamic] below).
+dynamic = ["version"]
+description = "A minimal, clean-room agent loop with structured tool calling — and the batch/REPL/CLI drivers around it"
+readme = "README.md"
+license = {text = "MIT"}
+# 3.12+: the package is written against the 3.12 typing syntax (`X | None` at runtime under
+# `from __future__ import annotations`, `type` aliases, PEP 695-era generics).
+requires-python = ">=3.12"
+# The core loop (nanoagent.core.agent) imports the stdlib and nothing else — these are what the
+# layers around it need. Notably absent: `openai`. All LLM transport is delegated to leaninfer's
+# build_backend, so the loop never sees a provider SDK and any object satisfying the `ChatModel`
+# duck-type is a usable model.
+dependencies = [
+    # The transport. leaninfer resolves `model.backend` against its built-ins and then against
+    # $LEANINFER_PLUGINS, which is how a private gateway is reached without a change here.
+    "leaninfer>=0.2",
+    # The YAML/config layer: `defaults:` composition, typed schema loading, `key=value` tokens.
+    # Capped below 0.6, which made a top-level `_schema:` mandatory and replaced the `defaults:`
+    # list with a single `_default:`. nanoagent's loader (nanoagent.config._merge_specs) and every
+    # config here speak the pre-0.6 dialect; on 0.10 every `*_cfg=` load raises "does not say which
+    # config class it fills". Lifting the cap is a port, not a bump.
+    "slimconfig>=0.2,<0.6",
+    # Struct-mode merge onto the all-MISSING dataclass schemas in nanoagent.config, and the
+    # tool-manifest reader in nanoagent.core.tool.
+    "omegaconf>=2.2",
+    # Terminal rendering for `run`/`chat` (streaming, tool-call panels, the live batch progress).
+    "rich",
+    # The `browse` trajectory viewer, and nothing else.
+    "textual",
+]
+authors = [
+    {name = "Zeyu Yang"},
+]
+keywords = ["llm", "agent", "tool-calling", "rollout", "trajectory", "repl"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "ruff",
+    # Only `repl.commands.inline_image` touches it, to read an image's pixel size — and it falls
+    # back to a guess when the import fails, so Pillow is a test dependency, not a runtime one.
+    "pillow",
+]
+
+[project.urls]
+Homepage = "https://github.com/zeyuyang8/nanoagent"
+Repository = "https://github.com/zeyuyang8/nanoagent"
+
+# So it is `nanoagent chat ...` rather than `python3 -m nanoagent chat ...`. Same entry point
+# either way — __main__.py and this both call cli.main.
+[project.scripts]
+nanoagent = "nanoagent.run.cli:main"
+# The coding-CLI face of the same agent, in Claude Code's flag grammar — its own name because
+# `mgen -p "..."` is what a script written against `claude` already says.
+mgen = "nanoagent.run.mgen:main"
+
+# leaninfer is not on PyPI (slimconfig is), so name its source. `uv sync` / `uv run` honour this;
+# `uv pip` / `pip` are registry-only and need the URL given explicitly — see the README's install
+# line and the CI workflow.
+[tool.uv.sources]
+leaninfer = { git = "https://github.com/zeyuyang8/leaninfer", branch = "master" }
+
+[tool.setuptools.dynamic]
+version = {attr = "nanoagent.__version__"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["nanoagent*"]
+
+# configs/ ships INSIDE the package, unlike leaninfer's repo-root configs/ (which are examples).
+# These are not examples: `mgen` with no arguments loads configs/mgen.yaml, and that file names
+# the three tool manifests. A default toolset that lives outside the wheel is a default toolset
+# an installed `mgen` cannot find. See nanoagent.core.tool.resolve_config.
+[tool.setuptools.package-data]
+nanoagent = ["py.typed", "configs/*.yaml", "configs/tools/*.yaml"]
+
+[tool.ruff]
+line-length = 150
+
+[tool.ruff.lint]
+# Pinned, not inherited: ruff's default selection has widened across releases, so an unpinned
+# config silently changes what "clean" means on every upgrade. These four are the set this
+# package was written against — likely bugs, not style.
+select = ["E4", "E7", "E9", "F"]
+extend-ignore = ["E203"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

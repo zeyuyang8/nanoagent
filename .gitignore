@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+build/
+dist/
+*.egg-info/
+# A library resolves against the consumer's constraints, so this repo pins nothing; `uv run` still
+# drops a lock here as a side effect of the dev venv.
+uv.lock
+.coverage
+htmlcov/
+# What the agent writes: trajectories, event logs, tools it wrote itself.
+expdir/
