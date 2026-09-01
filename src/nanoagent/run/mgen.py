@@ -7,7 +7,7 @@
     mgen --dump-config                     # what the flags above resolved to, as YAML
 
 The point is the *protocol*, not the transport: which server answers is
-:mod:`leaninfer.plugins`' business (a plugin, an OpenAI-compatible gateway, a local SGLang),
+:mod:`nanoagent.inference.plugins`' business (a plugin, an OpenAI-compatible gateway, a local SGLang),
 so a script written against ``claude`` runs against whatever this repo can reach by changing
 the config, not the script.
 

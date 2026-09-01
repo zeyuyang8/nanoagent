@@ -46,18 +46,18 @@ class ModelConfig:
 
     Every field is required (no defaults — a config must set each one explicitly); ``Optional``
     fields may be ``null`` but must still be present. That all-required contract is the ONLY
-    reason this is not just :class:`leaninfer.LeanInferConfig`: the fields are a strict subset of
+    reason this is not just :class:`~nanoagent.inference.config.LeanInferConfig`: the fields are a strict subset of
     it, by the same names, so :meth:`~nanoagent.core.model.Model.from_config` translates by field-name
     projection (pinned by ``tests/test_model_config_projection.py``).
     """
 
     model: str = MISSING
-    # transport: the built-in "sglang" (OpenAI SDK over base_url), or the name of a leaninfer
-    # backend plugin — see leaninfer.plugins.
+    # transport: the built-in "sglang" (OpenAI SDK over base_url), or the name of a
+    # backend plugin — see nanoagent.inference.plugins.
     backend: str = MISSING
     # SGLang endpoint.
     base_url: str | None = MISSING
-    # OpenAI-style key passed through to leaninfer; the sglang backend ignores it (SGLang
+    # OpenAI-style key passed through to the backend; the sglang backend ignores it (SGLang
     # accepts any key). May be null, but must be present.
     api_key: str | None = MISSING
     # null omits temperature from the request body entirely rather than sending a default: a
@@ -66,11 +66,11 @@ class ModelConfig:
     temperature: float | None = MISSING
     max_tokens: int | None = MISSING
     # Per-request wall-clock read timeout (seconds) on the OpenAI client — forwarded to
-    # leaninfer.LeanInferConfig.request_timeout. Bump for long-context workloads where a single
+    # LeanInferConfig.request_timeout. Bump for long-context workloads where a single
     # decode legitimately needs > 10 min on a shared engine.
     request_timeout: float = MISSING
     # Transient-failure retries (APITimeout / connection / 5xx) with exponential backoff, forwarded
-    # to leaninfer; 4xx fail fast. Set generously so a rollout rides out an SGLang cold-start / warmup
+    # to the backend; 4xx fail fast. Set generously so a rollout rides out an SGLang cold-start / warmup
     # thundering herd instead of abandoning the task — the batch has no per-rollout wall-clock cap, so
     # a truly-dead server still ends after max_retries+1 attempts rather than hanging. 0 disables.
     max_retries: int = MISSING

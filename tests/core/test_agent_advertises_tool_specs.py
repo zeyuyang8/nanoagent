@@ -23,7 +23,7 @@ registered tool, so the recorded specs can be compared exact-dict against a fres
 Non-vacuity: changing ``agent.py``'s ``query(messages, self._tool_specs)`` to
 ``query(messages, [])`` (or emptying ``self._tool_specs``) makes the exact-spec assertion fail.
 
-Fully offline: an in-process scripted model + a pure-Python tool — no openai / leaninfer /
+Fully offline: an in-process scripted model + a pure-Python tool — no openai / inference stack /
 network / server / GPU / native extension, and no disk. The ``on_delta`` keyword mirrors the one
 the real model backend accepts; the agent loop itself queries positionally.
 

@@ -7,12 +7,12 @@
 #
 # The model block below points at a local SGLang endpoint. To reach something else, copy this
 # file, change the model block, and point $MGEN_CONFIG at yours. `backend:` is resolved by
-# leaninfer — a built-in, or the name of a plugin file in a $LEANINFER_PLUGINS directory, which
+# nanoagent.inference — a built-in, or a plugin file in a $NANOAGENT_PLUGINS directory, which
 # is how a private gateway is reached without either package knowing about it.
 
 model:
   model: default            # served name; --model overrides it
-  backend: sglang           # a built-in, or the name of a plugin file (see leaninfer.plugins)
+  backend: sglang           # a built-in, or the name of a plugin file (see nanoagent.inference.plugins)
   base_url: http://127.0.0.1:30000/v1
   api_key: null             # a plugin backend reads its own key from the environment
   temperature: 0.6

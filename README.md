@@ -22,15 +22,12 @@ print(result.answer)
 
 ## Install
 
-`leaninfer`, the inference transport, is not on PyPI, so name it alongside:
-
 ```bash
-pip install \
-    git+https://github.com/zeyuyang8/nanoagent \
-    git+https://github.com/zeyuyang8/leaninfer
-```
+pip install git+https://github.com/zeyuyang8/nanoagent
 
-With `uv`, `[tool.uv.sources]` already names it — `uv sync` in a checkout is enough.
+# ...plus `[serve]` if you also want to bring the SGLang server up yourself
+pip install "nanoagent[serve] @ git+https://github.com/zeyuyang8/nanoagent"
+```
 
 ## The four entry points
 
@@ -79,9 +76,9 @@ local SGLang endpoint and turns on read / write / edit / bash / python.
 
 ## Where the model comes from
 
-nanoagent imports no provider SDK. `nanoagent.core.model.Model` is a thin adapter over
-[leaninfer](https://github.com/zeyuyang8/leaninfer), which resolves `model.backend` against its
-own built-ins and then against the plugin directories in `$LEANINFER_PLUGINS`:
+The agent loop imports no provider SDK. `nanoagent.core.model.Model` is a thin adapter over
+`nanoagent.inference`, which resolves `model.backend` against its own built-in transports and then
+against the plugin directories in `$NANOAGENT_PLUGINS`:
 
 ```yaml
 model:
@@ -90,8 +87,29 @@ model:
   base_url: http://127.0.0.1:30000/v1
 ```
 
-So a private gateway is a `.py` file in a `$LEANINFER_PLUGINS` directory. Neither package needs a
-line changed, and nanoagent deliberately keeps no allowlist of backend names.
+So a private gateway is a `.py` file in a `$NANOAGENT_PLUGINS` directory — one that defines a
+`BACKEND` class with a `from_config` classmethod. Nothing in the package needs a line changed, and
+there is deliberately no allowlist of backend names.
+
+## Serving
+
+`nanoagent.inference` also brings the server up, so the same YAML describes both sides of the
+connection. One `SGLangServeConfig` covers every topology and `mode` picks which:
+
+```bash
+pip install "nanoagent[serve] @ git+https://github.com/zeyuyang8/nanoagent"
+
+python -m nanoagent.inference.serve --config configs/gemma_4_31b_serve.yaml    # single node
+python -m nanoagent.inference.serve --config configs/gemma_4_31b_router.yaml   # router + N engines
+```
+
+SGLang itself is not a dependency: the engine is exec'd as the `sglang serve` CLI, so the serving
+environment owns that pin (it decides the CUDA/torch stack) and this package never constrains it.
+The four files in the repo-root `configs/` are worked examples — unlike `src/nanoagent/configs/`,
+which ships inside the wheel as `mgen`'s defaults.
+
+For batch inference without an agent, `nanoagent.inference.infer` runs a list of requests
+concurrently and returns the responses in input order.
 
 ## Tools
 
@@ -125,7 +143,8 @@ The dependency arrows only ever point left.
 
 | package | what it is |
 | --- | --- |
-| `nanoagent.core` | the loop and what it is made of: `agent`, `tool`, `model`, plus the `hooks` / `events` / `workspace` seams. Imports nothing from the other three. |
+| `nanoagent.inference` | how a model is reached: the transport backends and their plugin resolver, the concurrent batch `engine`, and the SGLang `serve` / `router` / `launch` side. |
+| `nanoagent.core` | the loop and what it is made of: `agent`, `tool`, `model`, plus the `hooks` / `events` / `workspace` seams. Only `core.model` reaches into `inference`. |
 | `nanoagent.tools` | the tools: `bash`, `code`, `file`, `write`, `skill`. None is loaded unless a manifest names it. |
 | `nanoagent.run` | a config becomes a run: `build`, `batch` (fan-out + resume ledger), `progress`, `trajectory`, `cli`, `mgen`. |
 | `nanoagent.repl` | chat only: `app`, `commands`, `tree` (a branching transcript), `browser`. |

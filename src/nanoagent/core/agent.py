@@ -29,7 +29,7 @@ instance, so one :class:`Agent` is safe to share across concurrent rollouts.
 
 Clean-room: depends only on :mod:`nanoagent.core.tool` and the ``ChatModel`` duck-type below —
 no ``openai`` import (the concrete backend lives in :mod:`nanoagent.core.model`, which adapts
-leaninfer ``Response`` objects into the :class:`Reply` shape this loop consumes).
+inference ``Response`` objects into the :class:`Reply` shape this loop consumes).
 """
 
 from __future__ import annotations
@@ -94,7 +94,7 @@ class ToolCall:
 class Reply:
     """One model turn, normalized: text + tool calls + token usage + cost.
 
-    The model backend (:mod:`nanoagent.core.model`) maps a leaninfer ``Response`` into this; the
+    The model backend (:mod:`nanoagent.core.model`) maps an inference ``Response`` into this; the
     loop consumes only this shape, so it never imports ``openai``.
     """
 

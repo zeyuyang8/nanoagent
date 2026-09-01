@@ -22,7 +22,7 @@ killed) and the stdout cap. A real isolation layer (container/jail) is deliberat
 scope for this local sandbox.
 
 Decoupling: this module imports only the Python standard library and
-:class:`nanoagent.core.tool.Tool` — not leaninfer, not the search/scoring/training packages
+:class:`nanoagent.core.tool.Tool` — not nanoagent.inference, not the search/scoring/training packages
 that use it, so nanoagent stays standalone and usable with nothing but the stdlib. Any in-sandbox
 capability (e.g. a search helper) enters ONLY through the optional ``preamble`` injection
 point — Python source prepended to the model's code before execution — which ships empty by

@@ -1,9 +1,9 @@
-"""Pins the nanoagent -> leaninfer config bridge: ModelConfig is a strict subset of LeanInferConfig.
+"""Pins the nanoagent -> nanoagent.inference config bridge: ModelConfig is a strict subset of LeanInferConfig.
 
-nanoagent and leaninfer keep SEPARATE model schemas on purpose, because their contracts differ:
+nanoagent and nanoagent.inference keep SEPARATE model schemas on purpose, because their contracts differ:
 :class:`~nanoagent.config.ModelConfig` is all-``MISSING`` (a run config must set every knob
-explicitly — no silent defaults), while :class:`~leaninfer.LeanInferConfig` carries concrete
-defaults so it can be built in code (``leaninfer.infer``). Merging them would cost one of those
+explicitly — no silent defaults), while :class:`~nanoagent.inference.LeanInferConfig` carries concrete
+defaults so it can be built in code (``nanoagent.inference.infer``). Merging them would cost one of those
 two properties.
 
 The price of two schemas is that they can drift, so :meth:`nanoagent.core.model.Model.from_config`
@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from dataclasses import fields
 
-from leaninfer import LeanInferConfig
+from nanoagent.inference import LeanInferConfig
 from nanoagent.config import ModelConfig
 
 

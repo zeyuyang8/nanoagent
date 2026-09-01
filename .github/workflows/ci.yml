@@ -24,12 +24,13 @@ jobs:
           # cache key and the loser warns "unable to reserve cache".
           cache-suffix: ${{ matrix.python-version }}
       - run: uv python install ${{ matrix.python-version }}
-      # `uv pip install` is pip-compatible and so ignores [tool.uv.sources]; leaninfer, the one
-      # dependency not on PyPI, is therefore named here explicitly.
+      # Deliberately NOT ".[dev,serve]": the serve tests stub huggingface_hub and sglang_router in
+      # sys.modules, so installing them for real would only slow CI down — and it would stop the
+      # suite from noticing if a module-level import of either crept in.
       - name: Install
         run: |
           uv venv --python ${{ matrix.python-version }}
-          uv pip install -e ".[dev]" "leaninfer @ git+https://github.com/zeyuyang8/leaninfer"
+          uv pip install -e ".[dev]"
       - name: Lint
         run: uv run ruff check .
       - name: Test

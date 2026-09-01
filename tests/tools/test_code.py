@@ -35,7 +35,7 @@ from nanoagent.tools.code import CodeExec, CodeExecutionError
 # A real ``import``/``from`` of a non-stdlib package at line start (so the docstring's prose
 # mentions of those names never false-trip this). These are nanoagent's own runtime deps: this
 # module must not reach even for them, because in-sandbox capability enters via ``preamble``.
-_PRODUCT_IMPORT = re.compile(r"^[ \t]*(?:import|from)[ \t]+(?:leaninfer|omegaconf|rich|textual)\b", re.M)
+_PRODUCT_IMPORT = re.compile(r"^[ \t]*(?:import|from)[ \t]+(?:openai|omegaconf|rich|textual)\b", re.M)
 
 
 # ---- criterion 1: selective return (large intermediate stays in the sandbox) ----
