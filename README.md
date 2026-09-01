@@ -11,8 +11,8 @@ takes is the same code an interactive chat takes.
 ```python
 import asyncio
 from nanoagent import Agent, get_tools
-from nanoagent.core.model import Model
-from nanoagent.config import ModelConfig
+from nanoagent.harness.core.model import Model
+from nanoagent.harness.config import ModelConfig
 
 tools = get_tools(["tools/bash.yaml"])                 # shipped with the package
 agent = Agent(model=Model.from_config(cfg), tools=tools, system_prompt="...")
@@ -76,7 +76,7 @@ local SGLang endpoint and turns on read / write / edit / bash / python.
 
 ## Where the model comes from
 
-The agent loop imports no provider SDK. `nanoagent.core.model.Model` is a thin adapter over
+The agent loop imports no provider SDK. `nanoagent.harness.core.model.Model` is a thin adapter over
 `nanoagent.inference`, which resolves `model.backend` against its own built-in transports and then
 against the plugin directories in `$NANOAGENT_PLUGINS`:
 
@@ -105,7 +105,7 @@ python -m nanoagent.inference.serve --config configs/gemma_4_31b_router.yaml   #
 
 SGLang itself is not a dependency: the engine is exec'd as the `sglang serve` CLI, so the serving
 environment owns that pin (it decides the CUDA/torch stack) and this package never constrains it.
-The four files in the repo-root `configs/` are worked examples — unlike `src/nanoagent/configs/`,
+The four files in the repo-root `configs/` are worked examples — unlike `src/nanoagent/harness/configs/`,
 which ships inside the wheel as `mgen`'s defaults.
 
 For batch inference without an agent, `nanoagent.inference.infer` runs a list of requests
@@ -139,15 +139,25 @@ so nothing is inherited silently and no hidden default decides a run. Reuse come
 
 ## Layout
 
-The dependency arrows only ever point left.
+There are two things in this package: **reaching a model**, and **doing something with one**.
+
+```text
+src/nanoagent/
+├── inference/     how a model is reached
+└── harness/       what is done with one
+```
 
 | package | what it is |
 | --- | --- |
-| `nanoagent.inference` | how a model is reached: the transport backends and their plugin resolver, the concurrent batch `engine`, and the SGLang `serve` / `router` / `launch` side. |
-| `nanoagent.core` | the loop and what it is made of: `agent`, `tool`, `model`, plus the `hooks` / `events` / `workspace` seams. Only `core.model` reaches into `inference`. |
-| `nanoagent.tools` | the tools: `bash`, `code`, `file`, `write`, `skill`. None is loaded unless a manifest names it. |
-| `nanoagent.run` | a config becomes a run: `build`, `batch` (fan-out + resume ledger), `progress`, `trajectory`, `cli`, `mgen`. |
-| `nanoagent.repl` | chat only: `app`, `commands`, `tree` (a branching transcript), `browser`. |
+| `nanoagent.inference` | the transport backends and their plugin resolver, the concurrent batch `engine`, and the SGLang `serve` / `router` / `launch` side. Needs none of the harness. |
+| `nanoagent.harness.core` | the loop and what it is made of: `agent`, `tool`, `model`, plus the `hooks` / `events` / `workspace` seams. This is the rollout hot path. |
+| `nanoagent.harness.tools` | the tools: `bash`, `code`, `file`, `write`, `skill`. None is loaded unless a manifest names it. |
+| `nanoagent.harness.run` | a config becomes a run: `build`, `batch` (fan-out + resume ledger), `progress`, `trajectory`, `cli`, `mgen`. |
+| `nanoagent.harness.repl` | chat only: `app`, `commands`, `tree` (a branching transcript), `browser`. |
+
+The dependency arrows only ever point left, and the one arrow that crosses between the two halves
+goes through a single module: `harness.core.model`. Nothing else in the harness imports
+`inference`, and `inference` imports nothing from the harness at all.
 
 ## Seams
 

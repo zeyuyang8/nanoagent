@@ -32,7 +32,7 @@ def test_importing_the_package_pulls_in_no_optional_or_provider_dependency() -> 
     in, so this is checked in a clean interpreter rather than this session (pytest has already
     imported plenty).
 
-    ``slimconfig`` is NOT in the list: nanoagent.config imports it at module scope, so it is a
+    ``slimconfig`` is NOT in the list: nanoagent.harness.config imports it at module scope, so it is a
     hard dependency of the package either way and asserting otherwise would only be true of an
     import path nobody takes.
     """

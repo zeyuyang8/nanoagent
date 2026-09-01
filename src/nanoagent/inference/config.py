@@ -35,7 +35,7 @@ def load_yaml(path: str) -> DictConfig:
     :func:`load_config`) funnels through here so that rule holds everywhere, and an absolute path
     is passed through untouched.
 
-    NOTE this is a DIFFERENT rule from :func:`nanoagent.core.tool.resolve_config`, which resolves
+    NOTE this is a DIFFERENT rule from :func:`nanoagent.harness.core.tool.resolve_config`, which resolves
     a tool manifest against the CWD first and the packaged configs second. Both are deliberate: a
     serving config names a checkout, a tool manifest names either the user's file or the wheel's.
     """

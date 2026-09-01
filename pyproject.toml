@@ -12,7 +12,7 @@ license = {text = "MIT"}
 # 3.12+: the package is written against the 3.12 typing syntax (`X | None` at runtime under
 # `from __future__ import annotations`, `type` aliases, PEP 695-era generics).
 requires-python = ">=3.12"
-# The core loop (nanoagent.core.agent) imports the stdlib and nothing else — these are what the
+# The core loop (nanoagent.harness.core.agent) imports the stdlib and nothing else — these are what the
 # layers around it need. `openai` is listed but the loop never sees it: all transport goes through
 # nanoagent.inference.backends.build_backend, which imports the SDK only when the sglang backend is
 # actually built, so any object satisfying the `ChatModel` duck-type is a usable model.
@@ -29,12 +29,12 @@ dependencies = [
     "openai>=1.40",
     # The YAML/config layer: `defaults:` composition, typed schema loading, `key=value` tokens.
     # Capped below 0.6, which made a top-level `_schema:` mandatory and replaced the `defaults:`
-    # list with a single `_default:`. nanoagent's loader (nanoagent.config._merge_specs) and every
+    # list with a single `_default:`. nanoagent's loader (nanoagent.harness.config._merge_specs) and every
     # config here speak the pre-0.6 dialect; on 0.10 every `*_cfg=` load raises "does not say which
     # config class it fills". Lifting the cap is a port, not a bump.
     "slimconfig>=0.2,<0.6",
-    # Struct-mode merge onto the all-MISSING dataclass schemas in nanoagent.config, and the
-    # tool-manifest reader in nanoagent.core.tool.
+    # Struct-mode merge onto the all-MISSING dataclass schemas in nanoagent.harness.config, and the
+    # tool-manifest reader in nanoagent.harness.core.tool.
     "omegaconf>=2.2",
     # Terminal rendering for `run`/`chat` (streaming, tool-call panels, the live batch progress).
     "rich",
@@ -79,10 +79,10 @@ Repository = "https://github.com/zeyuyang8/nanoagent"
 # So it is `nanoagent chat ...` rather than `python3 -m nanoagent chat ...`. Same entry point
 # either way — __main__.py and this both call cli.main.
 [project.scripts]
-nanoagent = "nanoagent.run.cli:main"
+nanoagent = "nanoagent.harness.run.cli:main"
 # The coding-CLI face of the same agent, in Claude Code's flag grammar — its own name because
 # `mgen -p "..."` is what a script written against `claude` already says.
-mgen = "nanoagent.run.mgen:main"
+mgen = "nanoagent.harness.run.mgen:main"
 
 [tool.setuptools.dynamic]
 version = {attr = "nanoagent.__version__"}
@@ -91,12 +91,15 @@ version = {attr = "nanoagent.__version__"}
 where = ["src"]
 include = ["nanoagent*"]
 
-# src/nanoagent/configs/ ships INSIDE the package, unlike the repo-root configs/ (which are
+# src/nanoagent/harness/configs/ ships INSIDE the package, unlike the repo-root configs/ (which are
 # serving examples). These are not examples: `mgen` with no arguments loads configs/mgen.yaml, and
 # that file names the three tool manifests. A default toolset that lives outside the wheel is a
-# default toolset an installed `mgen` cannot find. See nanoagent.core.tool.resolve_config.
+# default toolset an installed `mgen` cannot find. See nanoagent.harness.core.tool.resolve_config.
+# Two keys because package-data is keyed by the package that OWNS the files: py.typed marks the
+# whole distribution, the configs belong to nanoagent.harness.
 [tool.setuptools.package-data]
-nanoagent = ["py.typed", "configs/*.yaml", "configs/tools/*.yaml"]
+nanoagent = ["py.typed"]
+"nanoagent.harness" = ["configs/*.yaml", "configs/tools/*.yaml"]
 
 [tool.ruff]
 line-length = 150

@@ -1,6 +1,6 @@
 """The inference side of nanoagent: async batched LLM calls, and the SGLang server behind them.
 
-This is where :class:`nanoagent.core.model.Model` — and so the agent loop — actually reaches a
+This is where :class:`nanoagent.harness.core.model.Model` — and so the agent loop — actually reaches a
 model. It is also usable on its own, without an agent: :func:`~nanoagent.inference.engine.infer`
 is a plain concurrent batch runner over a list of requests.
 
@@ -15,7 +15,7 @@ Public API:
   * :func:`~nanoagent.inference.launch.launch_from_yaml` — the launch dispatcher: ``python -m nanoagent.inference.launch --config <yaml>``, whose ``launch.target`` key selects WHERE to serve (``local`` -> serve in-process). Reads where to serve from config, so no per-deployment shell script is needed.
   * :func:`~nanoagent.inference.router.run_router` — internal launcher used by ``SGLangServer.run()`` when ``mode`` is ``router`` or ``multinode``: fan one model across an ``sglang_router`` + multiple single-node engines.
 
-There is deliberately no multi-turn tool loop here. :class:`nanoagent.core.agent.Agent` is that
+There is deliberately no multi-turn tool loop here. :class:`nanoagent.harness.core.agent.Agent` is that
 loop and is the only one in the package; this side returns ONE :class:`~nanoagent.inference.types.Response`
 per request and lets the caller decide what to do with the tool calls in it.
 
