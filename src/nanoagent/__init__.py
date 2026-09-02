@@ -10,8 +10,7 @@ Public surface (the stdlib-only core — no ``openai`` import):
 Dependencies point in one direction: ``cli`` and ``web`` drive ``runtime``; runtime assembles
 ``core`` with ``inference`` and optional ``tools``. The core imports none of those outer layers.
 There is one agent loop and one model adapter, regardless of whether a batch, terminal, or web
-request drives them. ``nanoagent.harness`` remains only as a compatibility namespace for pre-0.3
-imports.
+request drives them.
 """
 
 from __future__ import annotations

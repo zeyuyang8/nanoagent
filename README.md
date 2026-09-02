@@ -269,9 +269,6 @@ src/nanoagent/
 | `nanoagent.cli` | `run`, `mgen`, chat, browser, and terminal rendering. |
 | `nanoagent.web` | Server-owned configuration, bounded run lifecycle, cancellation, and the internal SSE API. |
 
-The old `nanoagent.harness.*` import paths remain as compatibility shims for pre-0.3 consumers;
-new code should use the packages above.
-
 Dependencies point inward: CLI and web use runtime; runtime assembles core, inference, and tools;
 core and inference do not import the outer layers. The only adapter from the agent loop to a model
 transport is `nanoagent.runtime.model`.
