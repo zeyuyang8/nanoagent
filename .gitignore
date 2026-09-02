@@ -13,3 +13,7 @@ uv.lock
 htmlcov/
 # What the agent writes: trajectories, event logs, tools it wrote itself.
 expdir/
+# Provider keys. This repo is public and `git add -A` is one keystroke, so the ignore comes
+# before the first key ever lands here, not after.
+.env
+.env.*

@@ -7,9 +7,16 @@ what the sampler saw. Applied by :func:`~nanoagent.inference.backends.build_back
 names a ``tokenizer`` and the transport is not already native, so it covers plugin transports too
 without any of them knowing it exists.
 
-**What these ids are not.** Three separate reasons a reconstructed record can disagree with the
+**What these ids are not.** Four separate reasons a reconstructed record can disagree with the
 real one, all of them silent:
 
+  * **the stop token is missing, on every single reply.** The model generates one and the provider
+    counts it, but the chat API strips it from the text, so re-encoding cannot recover it.
+    Measured against OpenRouter serving gemma-4-31b-it, reconstructing from the same vocabulary
+    the server used: prompt 20 vs 20 (exact), completion 7 vs 8 — the one missing id is
+    ``<end_of_turn>``. It is not guessed back, because which stop token was emitted is not
+    knowable from the reply: ``finish_reason="length"`` means there was none at all, and a
+    vocabulary can hold several. ``usage.completion_tokens`` is the authoritative count.
   * a provider that routes one model slug across several backends may not have used this
     vocabulary at all;
   * ``encode(decode(ids))`` is not the identity for every tokenizer, so even the right vocabulary

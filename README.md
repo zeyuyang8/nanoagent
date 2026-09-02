@@ -91,6 +91,22 @@ So a private gateway is a `.py` file in a `$NANOAGENT_PLUGINS` directory — one
 `BACKEND` class with a `from_config` classmethod. Nothing in the package needs a line changed, and
 there is deliberately no allowlist of backend names.
 
+A *public* provider needs even less, because `backend: sglang` is not really sglang-specific — it
+is the async OpenAI SDK pointed at a `base_url`, and most hosted APIs speak that. OpenRouter is a
+config edit and nothing else:
+
+```bash
+export OPENROUTER_API_KEY=sk-or-...
+mgen --config configs/openrouter.yaml -p "what does src/nanoagent/harness/run/build.py do?"
+```
+
+Verified end to end against `deepseek/deepseek-v4-flash-0731` — completions, tool calls, streaming,
+usage and cost, and a full agent rollout that made two tool calls and answered from what it read.
+Two things worth knowing before picking a model there. The `:free` tier shares an upstream pool and
+answers `429` under any real load, so it suits a smoke test and not a batch. And cheapest per token
+is not cheapest per task: on the same question a model at *half* the sticker price cost 2.1× as
+much, because it reasoned and read a second file — it was also the one that got the answer right.
+
 ## Tokens
 
 Text is what a provider returns; token ids are what a trainer needs. Name a tokenizer and every
