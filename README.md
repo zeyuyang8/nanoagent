@@ -91,6 +91,46 @@ So a private gateway is a `.py` file in a `$NANOAGENT_PLUGINS` directory — one
 `BACKEND` class with a `from_config` classmethod. Nothing in the package needs a line changed, and
 there is deliberately no allowlist of backend names.
 
+## Tokens
+
+Text is what a provider returns; token ids are what a trainer needs. Name a tokenizer and every
+reply carries both:
+
+```yaml
+model:
+  backend: sglang_native                     # SGLang's /generate — ids in, ids out
+  base_url: http://127.0.0.1:30000/v1
+  tokenizer: google/gemma-3-27b-it           # the client owns the chat template
+```
+
+```python
+response.tokens.completion_ids   # [11, 12, ...]
+response.tokens.logprobs         # per token
+response.tokens.fidelity         # Fidelity.NATIVE
+```
+
+**No chat API reports token ids** — not OpenRouter's, not SGLang's own `/v1`. Only `/generate`
+does, by taking `input_ids` and answering with the ids it sampled. So the split is `/generate` vs
+`/v1`, not local vs hosted, and `Tokens.fidelity` names which side a record came from:
+
+| | `backend: sglang_native` | `backend: sglang` (incl. OpenRouter) |
+| --- | --- | --- |
+| prompt | ids we rendered, sent verbatim | text; ids re-rendered locally |
+| completion | the ids the sampler emitted | text, re-encoded locally |
+| logprobs | per token | none |
+| `fidelity` | `NATIVE` — trainable | `RECONSTRUCTED` — informational |
+
+`RECONSTRUCTED` is a real answer, not a placeholder: it is right often enough to be useful for a
+length or an alignment, and wrong often enough that a per-token loss must not touch it (a routing
+provider may not have used this vocabulary at all; `encode(decode(ids))` is not the identity; and a
+tool call comes back as a parsed field with its delimiters gone, so those generated tokens are
+simply missing). One shape, and a label that says which it is, beats a guarantee that quietly isn't.
+
+The trade on the native path is that the client owns the chat template — which is what removes
+train/serve skew, and what moves tool-call parsing and streaming client-side. Neither is
+implemented there yet, so `sglang_native` generates and scores batches (`nanoagent.inference.infer`)
+and `sglang` drives the agent loop. Needs `pip install "nanoagent[tokens]"`.
+
 ## Serving
 
 `nanoagent.inference` also brings the server up, so the same YAML describes both sides of the
@@ -149,7 +189,7 @@ src/nanoagent/
 
 | package | what it is |
 | --- | --- |
-| `nanoagent.inference` | the transport backends and their plugin resolver, the concurrent batch `engine`, and the SGLang `serve` / `router` / `launch` side. Needs none of the harness. |
+| `nanoagent.inference` | the transport backends and their plugin resolver, the `tokenizer` seam, the concurrent batch `engine`, and the SGLang `serve` / `router` / `launch` side. Needs none of the harness. |
 | `nanoagent.harness.core` | the loop and what it is made of: `agent`, `tool`, `model`, plus the `hooks` / `events` / `workspace` seams. This is the rollout hot path. |
 | `nanoagent.harness.tools` | the tools: `bash`, `code`, `file`, `write`, `skill`. None is loaded unless a manifest names it. |
 | `nanoagent.harness.run` | a config becomes a run: `build`, `batch` (fan-out + resume ledger), `progress`, `trajectory`, `cli`, `mgen`. |

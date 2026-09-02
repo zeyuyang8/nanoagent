@@ -73,6 +73,13 @@ class LeanInferConfig:
     plugin_dirs: list[str] = field(default_factory=list)
     # served model name (sglang --served-model-name).
     model: str = "default"
+    # HuggingFace repo id or local dir of the tokenizer, which is what turns this into a
+    # token-in/token-out client. REQUIRED by backend="sglang_native" (it sends input_ids, so the
+    # chat template is applied here). Optional for a chat transport: naming one wraps it so its
+    # replies still carry ids — reconstructed by re-encoding the text, and labelled
+    # Fidelity.RECONSTRUCTED. null = no tokens at all, which is the honest answer for a provider
+    # whose vocabulary we do not have.
+    tokenizer: str | None = None
     # sglang OpenAI-compatible /v1 endpoint; required for backend="sglang".
     base_url: str | None = None
     # auth key passed to the OpenAI client; SGLang ignores it but the SDK requires a non-empty

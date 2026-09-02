@@ -19,9 +19,9 @@ import asyncio
 import logging
 import random
 from collections.abc import Awaitable, Callable
-from typing import Any, Protocol
+from typing import Any, ClassVar, Protocol
 
-from nanoagent.inference.types import Response
+from nanoagent.inference.types import Fidelity, Response
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -36,7 +36,17 @@ class Backend(Protocol):
     (:func:`~nanoagent.inference.engine.infer`) calls ``generate(messages)`` unchanged. :meth:`aclose`
     releases transport resources (e.g. an HTTP connection pool); the batch path closes the
     backend it builds when the batch finishes.
+
+    :attr:`fidelity` declares, on the CLASS, whether this transport can report the ids the
+    sampler actually saw. It is read before an instance exists (by
+    :func:`~nanoagent.inference.backends.build_backend`, deciding whether to wrap the transport in
+    a reconstructing one), which is why it is a class attribute and not something ``from_config``
+    computes. A transport written before this field existed is read as
+    :attr:`~nanoagent.inference.types.Fidelity.RECONSTRUCTED`, which is the safe reading: an
+    unannotated backend is an OpenAI-compatible one.
     """
+
+    fidelity: ClassVar[Fidelity]
 
     async def generate(
         self,

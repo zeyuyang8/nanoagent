@@ -26,17 +26,20 @@ def test_version_is_the_single_source_of_truth() -> None:
 def test_importing_the_package_pulls_in_no_optional_or_provider_dependency() -> None:
     """The base install is client-side and small — the heavy imports are all deferred.
 
-    ``openai`` / ``httpx`` load when a backend is BUILT (backends/__init__.py), huggingface_hub
-    when weights are fetched, and sglang_router when the router topology runs. A module-level
-    import creeping into any of them would make `import nanoagent.inference` drag the serve stack
-    in, so this is checked in a clean interpreter rather than this session (pytest has already
-    imported plenty).
+    ``openai`` / ``httpx`` load when a backend is BUILT (backends/__init__.py), ``transformers``
+    when a config names a tokenizer (tokenizer.load_tokenizer), huggingface_hub when weights are
+    fetched, and sglang_router when the router topology runs. A module-level import creeping into
+    any of them would make `import nanoagent.inference` drag the serve stack in, so this is checked
+    in a clean interpreter rather than this session (pytest has already imported plenty).
 
     ``slimconfig`` is NOT in the list: nanoagent.harness.config imports it at module scope, so it is a
     hard dependency of the package either way and asserting otherwise would only be true of an
     import path nobody takes.
     """
-    probe = "import nanoagent.inference, sys; print(','.join(m for m in ('openai', 'httpx', 'huggingface_hub', 'sglang_router') if m in sys.modules))"
+    probe = (
+        "import nanoagent.inference, sys; print(','.join(m for m in "
+        "('openai', 'httpx', 'transformers', 'huggingface_hub', 'sglang_router') if m in sys.modules))"
+    )
     leaked = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, check=True).stdout.strip()
     assert leaked == "", f"import nanoagent.inference pulled in: {leaked}"
 

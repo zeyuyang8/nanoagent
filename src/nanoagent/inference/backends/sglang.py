@@ -26,7 +26,6 @@ empty and the caller just gets the plain answer.
 
 from __future__ import annotations
 
-import importlib
 from collections.abc import Callable
 from typing import Any
 
@@ -35,21 +34,9 @@ from openai import AsyncOpenAI, DefaultAsyncHttpxClient
 
 from nanoagent.inference.backend import retry_async, token_cost
 from nanoagent.inference.config import LeanInferConfig
+from nanoagent.inference.http import httpx as _httpx
 from nanoagent.inference.thinking import split_thinking
-from nanoagent.inference.types import Response, ToolCall
-
-# The httpx distribution the INSTALLED SDK builds on: openai 1.x/2.x uses `httpx`, openai >=3
-# uses the renamed `httpx2` fork. The Limits/Timeout objects handed to DefaultAsyncHttpxClient
-# must be that module's classes — mixing them is not a clean failure. `Limits` duck-types and
-# appears to work, while `Timeout` dies deep in the connection pool as
-# "unsupported operand type(s) for +: 'float' and 'Timeout'", surfacing as a bare
-# APIConnectionError on EVERY request, which reads like an unreachable endpoint rather than a
-# type mismatch. So resolve the module from the SDK's own client class instead of importing a
-# name and hoping the two agree; this is also why nanoagent declares no direct httpx dependency
-# (whichever one openai pins is by definition the right one).
-_httpx = importlib.import_module(
-    DefaultAsyncHttpxClient.__mro__[1].__module__.partition(".")[0]
-)
+from nanoagent.inference.types import Fidelity, Response, ToolCall
 
 # 4xx / auth errors won't succeed on retry — fail fast on these.
 _ABORT_ERRORS: tuple[type[Exception], ...] = (
@@ -100,6 +87,12 @@ def _reasoning_text(obj: Any) -> str | None:
 
 class SglangBackend:
     """Async chat backend over ``AsyncOpenAI.chat.completions`` for SGLang."""
+
+    #: Text in, text out. The chat API reports token COUNTS and no ids — that is true of SGLang's
+    #: own ``/v1`` endpoint as much as of a hosted gateway — so any ids attributed to a reply from
+    #: here were produced locally. :mod:`nanoagent.inference.backends.sglang_native` is the same
+    #: server through the endpoint that does return them.
+    fidelity = Fidelity.RECONSTRUCTED
 
     #: The request field carrying the output-token budget. OpenAI deprecated ``max_tokens`` in
     #: favour of ``max_completion_tokens``, and gateways disagree about which they accept — some
