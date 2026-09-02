@@ -171,11 +171,12 @@ def _run(argv: list[str]) -> int:
 _DELEGATES = {
     "chat": "nanoagent.harness.repl.app",
     "browse": "nanoagent.harness.repl.browser",
+    "web": "nanoagent.web.cli",
     # The one command that takes argparse flags rather than config tokens; it is also installed
     # as its own console script, `mgen` (see nanoagent.harness.run.mgen for why it is the exception).
     "mgen": "nanoagent.harness.run.mgen",
 }
-_USAGE = "usage: nanoagent {run|chat|browse|mgen} [args...]"
+_USAGE = "usage: nanoagent {run|chat|browse|mgen|web} [args...]"
 
 
 def main(argv: list[str] | None = None) -> int:

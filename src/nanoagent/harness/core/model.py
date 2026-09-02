@@ -82,6 +82,10 @@ class Model:
         )
         return _to_reply(response)
 
+    async def aclose(self) -> None:
+        """Close the transport pool held by a long-lived host."""
+        await self._backend.aclose()
+
 
 def _to_reply(response: Response) -> Reply:
     """Map an inference :class:`~nanoagent.inference.types.Response` onto the loop's :class:`Reply`."""

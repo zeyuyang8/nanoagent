@@ -54,6 +54,9 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
+# ASGI web host for server-side application integrations. Kept optional so the batch / training
+# package does not acquire an HTTP framework merely because it imports nanoagent.
+web = ["starlette>=0.41", "uvicorn>=0.30"]
 # The serve side (nanoagent.inference.serve / router): `ensure_weights` fetches missing shards
 # through huggingface_hub, and mode=router/multinode fronts the engines with sglang_router. SGLang
 # itself is NOT a dependency — the engine is exec'd as the `sglang serve` CLI, so the serving env
@@ -72,6 +75,9 @@ dev = [
     "pytest",
     "pytest-asyncio",
     "ruff",
+    # Exercise the optional ASGI surface in the normal test environment.
+    "starlette>=0.41",
+    "httpx>=0.27",
     # Only `repl.commands.inline_image` touches it, to read an image's pixel size — and it falls
     # back to a guess when the import fails, so Pillow is a test dependency, not a runtime one.
     "pillow",

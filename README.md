@@ -29,7 +29,7 @@ pip install git+https://github.com/zeyuyang8/nanoagent
 pip install "nanoagent[serve] @ git+https://github.com/zeyuyang8/nanoagent"
 ```
 
-## The four entry points
+## The command-line entry points
 
 Everything is described by a YAML file rather than by flags, because a run has to be reproducible
 from something you can commit. The one exception is `mgen`, and it is a thin layer *over* a config
@@ -49,6 +49,54 @@ nanoagent chat chat_cfg=mychat.yaml
 # a TUI for reading back what any of the above wrote
 nanoagent browse path=expdir/chat/
 ```
+
+## Web applications
+
+Keep NanoAgent as the Python runtime and install the typed Node client in the application server;
+do not port the agent loop into each web stack:
+
+```bash
+pip install "nanoagent[web] @ git+https://github.com/zeyuyang8/nanoagent"
+nanoagent web web_cfg=configs/web_openrouter.yaml
+
+cd packages/client
+npm install
+npm run build
+
+# From Mochi during local development:
+npm install ../nanoagent/packages/client
+# After publishing the package:
+npm install @nanoagent/client
+```
+
+```ts
+import {NanoAgentClient} from "@nanoagent/client";
+
+const agent = new NanoAgentClient({
+  baseUrl: process.env.NANOAGENT_URL!,
+  token: process.env.NANOAGENT_API_TOKEN,
+});
+
+for await (const event of agent.stream(
+  {input: "Summarize the current document", messages, instructions},
+  {signal},
+)) {
+  if (event.type === "delta" && event.kind === "content") sendToBrowser(event.text);
+}
+```
+
+The server provides `POST /v1/runs` as an SSE stream, `DELETE /v1/runs/:id` for explicit
+cancellation, and `GET /health`. Disconnecting the stream also cancels its run. Every event is a
+typed discriminated union: `start`, `delta`, `tool`, `step`, `done`, or `error`.
+
+The YAML owns the backend, credentials, tools and budgets. A request can carry prior messages and
+additional application instructions, but cannot select a model or grant itself a tool. Bind to
+loopback for a same-container application; a non-loopback bind requires `api_token`. The included
+`configs/web_openrouter.yaml` deliberately starts with no tools, no checkout context, one model
+turn and hidden reasoning.
+
+`@nanoagent/client` is a server-side package. A browser should call its own application backend,
+which applies user identity, tenancy and product policy before forwarding a run to NanoAgent.
 
 Any leaf of a config can be overridden inline on any command:
 
