@@ -8,7 +8,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
-from nanoagent.harness.config import WebConfig
+from nanoagent.web.config import WebConfig
 from nanoagent.web.runtime import RunHost, ValidationError, validate_run_request
 
 

@@ -5,7 +5,8 @@ from __future__ import annotations
 import logging
 import sys
 
-from nanoagent.harness.config import WebConfig, load_config_args
+from nanoagent.runtime.config import load_config_args
+from nanoagent.web.config import WebConfig
 
 _USAGE = "usage: nanoagent web web_cfg=<config.yaml> [dotted.key=value ...]"
 

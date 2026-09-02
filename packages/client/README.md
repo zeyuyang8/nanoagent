@@ -1,6 +1,8 @@
 # `@nanoagent/client`
 
 Typed, dependency-free Node client for a server-hosted NanoAgent runtime.
+Its request and event types are generated from the same JSON Schemas the Python host validates,
+so the two packages share one wire contract.
 
 ```ts
 import {NanoAgentClient} from "@nanoagent/client";

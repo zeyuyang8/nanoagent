@@ -11,7 +11,7 @@ order. A request that fails after the backend exhausts its retries is captured a
 One turn per request is the whole contract here: a :class:`~nanoagent.inference.types.Request` carrying
 ``tools`` gets whatever the model asked for back in :attr:`~nanoagent.inference.types.Response.tool_calls`,
 and nothing runs them. Running them and going round again is
-:class:`nanoagent.harness.core.agent.Agent`, which is a loop over ONE conversation rather than a batch
+:class:`nanoagent.core.agent.Agent`, which is a loop over ONE conversation rather than a batch
 of them, and so lives on the other side of the package rather than inside it.
 """
 

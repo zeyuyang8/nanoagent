@@ -11,8 +11,8 @@ takes is the same code an interactive chat takes.
 ```python
 import asyncio
 from nanoagent import Agent, get_tools
-from nanoagent.harness.core.model import Model
-from nanoagent.harness.config import ModelConfig
+from nanoagent.runtime.model import Model
+from nanoagent.runtime.config import ModelConfig
 
 tools = get_tools(["tools/bash.yaml"])                 # shipped with the package
 agent = Agent(model=Model.from_config(cfg), tools=tools, system_prompt="...")
@@ -56,18 +56,22 @@ Keep NanoAgent as the Python runtime and install the typed Node client in the ap
 do not port the agent loop into each web stack:
 
 ```bash
-pip install "nanoagent[web] @ git+https://github.com/zeyuyang8/nanoagent"
+git clone https://github.com/zeyuyang8/nanoagent.git
+cd nanoagent
+pip install ".[web]"
+export OPENROUTER_API_KEY=...
 nanoagent web web_cfg=configs/web_openrouter.yaml
 
-cd packages/client
-npm install
-npm run build
+# In Mochi, link the local client during development:
+npm install /path/to/nanoagent/packages/client
 
-# From Mochi during local development:
-npm install ../nanoagent/packages/client
-# After publishing the package:
+# After publishing it:
 npm install @nanoagent/client
 ```
+
+In a deployment, copy `configs/web_openrouter.yaml` and `configs/models/openrouter.yaml` into the
+service configuration and pin the Python package version independently of those operator-owned
+files.
 
 ```ts
 import {NanoAgentClient} from "@nanoagent/client";
@@ -124,7 +128,7 @@ local SGLang endpoint and turns on read / write / edit / bash / python.
 
 ## Where the model comes from
 
-The agent loop imports no provider SDK. `nanoagent.harness.core.model.Model` is a thin adapter over
+The agent loop imports no provider SDK. `nanoagent.runtime.model.Model` is a thin adapter over
 `nanoagent.inference`, which resolves `model.backend` against its own built-in transports and then
 against the plugin directories in `$NANOAGENT_PLUGINS`:
 
@@ -145,7 +149,7 @@ config edit and nothing else:
 
 ```bash
 export OPENROUTER_API_KEY=sk-or-...
-mgen --config configs/openrouter.yaml -p "what does src/nanoagent/harness/run/build.py do?"
+mgen --config configs/openrouter.yaml -p "what does src/nanoagent/runtime/build.py do?"
 ```
 
 Verified end to end against `deepseek/deepseek-v4-flash-0731` — completions, tool calls, streaming,
@@ -209,7 +213,7 @@ python -m nanoagent.inference.serve --config configs/gemma_4_31b_router.yaml   #
 
 SGLang itself is not a dependency: the engine is exec'd as the `sglang serve` CLI, so the serving
 environment owns that pin (it decides the CUDA/torch stack) and this package never constrains it.
-The four files in the repo-root `configs/` are worked examples — unlike `src/nanoagent/harness/configs/`,
+The repo-root `configs/` tree contains worked examples — unlike `src/nanoagent/configs/`,
 which ships inside the wheel as `mgen`'s defaults.
 
 For batch inference without an agent, `nanoagent.inference.infer` runs a list of requests
@@ -243,25 +247,34 @@ so nothing is inherited silently and no hidden default decides a run. Reuse come
 
 ## Layout
 
-There are two things in this package: **reaching a model**, and **doing something with one**.
+There are two core responsibilities: **reaching a model**, and **doing something with one**.
+The runtime composes them; CLI and web are adapters over that runtime, not alternate loops.
 
 ```text
 src/nanoagent/
-├── inference/     how a model is reached
-└── harness/       what is done with one
+├── core/          provider-independent agent loop and tool contracts
+├── inference/     model transports, batch inference, and SGLang serving
+├── runtime/       configuration, assembly, events, trajectories, batch runs
+├── tools/         built-in tool implementations
+├── cli/           terminal commands and REPL
+└── web/           internal HTTP/SSE adapter over the runtime
 ```
 
 | package | what it is |
 | --- | --- |
-| `nanoagent.inference` | the transport backends and their plugin resolver, the `tokenizer` seam, the concurrent batch `engine`, and the SGLang `serve` / `router` / `launch` side. Needs none of the harness. |
-| `nanoagent.harness.core` | the loop and what it is made of: `agent`, `tool`, `model`, plus the `hooks` / `events` / `workspace` seams. This is the rollout hot path. |
-| `nanoagent.harness.tools` | the tools: `bash`, `code`, `file`, `write`, `skill`. None is loaded unless a manifest names it. |
-| `nanoagent.harness.run` | a config becomes a run: `build`, `batch` (fan-out + resume ledger), `progress`, `trajectory`, `cli`, `mgen`. |
-| `nanoagent.harness.repl` | chat only: `app`, `commands`, `tree` (a branching transcript), `browser`. |
+| `nanoagent.core` | The stdlib-only loop, tool contract, hooks, and workspace context. |
+| `nanoagent.inference` | Model transports, plugin resolution, batch inference, tokenization, and SGLang serving. |
+| `nanoagent.runtime` | Typed configuration, one agent factory, lifecycle events, trajectories, and batch execution. |
+| `nanoagent.tools` | Opt-in `bash`, `code`, file, write, and skill implementations. |
+| `nanoagent.cli` | `run`, `mgen`, chat, browser, and terminal rendering. |
+| `nanoagent.web` | Server-owned configuration, bounded run lifecycle, cancellation, and the internal SSE API. |
 
-The dependency arrows only ever point left, and the one arrow that crosses between the two halves
-goes through a single module: `harness.core.model`. Nothing else in the harness imports
-`inference`, and `inference` imports nothing from the harness at all.
+The old `nanoagent.harness.*` import paths remain as compatibility shims for pre-0.3 consumers;
+new code should use the packages above.
+
+Dependencies point inward: CLI and web use runtime; runtime assembles core, inference, and tools;
+core and inference do not import the outer layers. The only adapter from the agent loop to a model
+transport is `nanoagent.runtime.model`.
 
 ## Seams
 
@@ -284,7 +297,7 @@ file. That is the artifact a scorer or an RL trainer consumes, and `nanoagent br
 ## Development
 
 ```bash
-uv venv && uv sync --extra dev
+uv venv && uv sync --extra dev --extra web
 uv run pytest -q
 uv run ruff check .
 ```

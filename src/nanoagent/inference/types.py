@@ -54,7 +54,7 @@ class Request:
     endpoint serves plain completions and tool-calling turns. ``None`` (the default, and what
     every :meth:`coerce` shape produces) offers no tools, so the plain batch path is unchanged.
     Whatever the model asks for comes back in :attr:`Response.tool_calls`; running those calls and
-    feeding the results back is a multi-turn loop, which is :class:`nanoagent.harness.core.agent.Agent`
+    feeding the results back is a multi-turn loop, which is :class:`nanoagent.core.agent.Agent`
     and deliberately not here.
     """
 

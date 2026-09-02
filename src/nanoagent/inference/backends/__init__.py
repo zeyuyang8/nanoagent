@@ -8,7 +8,7 @@ module is imported only when its name is selected — so importing this package 
 the ``openai`` SDK until the sglang path is actually chosen.
 
 It is also where ``config.tokenizer`` is honoured, so that every caller — the batch engine, the
-harness's :class:`~nanoagent.harness.core.model.Model`, a plugin transport that has never heard of
+harness's :class:`~nanoagent.runtime.model.Model`, a plugin transport that has never heard of
 any of this — gets the same token guarantee from the one place a backend is built.
 """
 

@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from dataclasses import replace
+from pathlib import Path
 from typing import Any
 
 import pytest
+from jsonschema import validate
 
-from nanoagent.harness.config import AgentConfig, ModelConfig, WebConfig
-from nanoagent.harness.core.agent import AgentResult, StopReason
+from nanoagent.runtime.config import AgentConfig, ModelConfig
+from nanoagent.core.agent import AgentResult, StopReason
+from nanoagent.web.config import WebConfig
 from nanoagent.web.runtime import RunHost, ValidationError, validate_run_request
 
 
@@ -57,9 +61,14 @@ async def test_streams_content_and_done_without_reasoning() -> None:
     }))
     events = [event async for event in active.events() if event is not None]
 
+    schema = json.loads((Path(__file__).parents[2] / "src/nanoagent/web/schema/run-events.schema.json").read_text())
+    for event in events:
+        validate(event, schema)
+
     assert [event["type"] for event in events] == ["start", "delta", "delta", "done"]
     assert "private" not in str(events)
     assert events[-1]["answer"] == "hello"
+    assert events[-1]["stop_reason"] == "answer"
     assert events[-1]["usage"] == {"total_tokens": 3}
     assert agent.messages == [
         {"role": "system", "content": "BASE\nWORKSPACE"},
@@ -113,3 +122,8 @@ def test_rejects_system_messages_and_bad_tool_history() -> None:
 def test_non_loopback_bind_requires_a_token() -> None:
     with pytest.raises(ValueError, match="api_token"):
         config(host="0.0.0.0", api_token=None)
+
+
+def test_web_host_rejects_a_second_file_event_stream() -> None:
+    with pytest.raises(ValueError, match="events must be null"):
+        config(agent=replace(config().agent, events="duplicate.jsonl"))

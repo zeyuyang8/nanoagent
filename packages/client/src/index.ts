@@ -1,66 +1,16 @@
-export type MessageRole = "user" | "assistant" | "tool";
+export type {Message, RunRequest} from "./request.generated";
+import type {RunRequest} from "./request.generated";
 
-export interface Message {
-  role: MessageRole;
-  content: string;
-  tool_call_id?: string;
-}
-
-export interface RunRequest {
-  input: string;
-  messages?: Message[];
-  instructions?: string;
-  metadata?: Record<string, unknown>;
-}
-
-interface EventBase {
-  runId: string;
-}
-
-export interface StartEvent extends EventBase {
-  type: "start";
-  metadata: Record<string, unknown> | null;
-}
-
-export interface DeltaEvent extends EventBase {
-  type: "delta";
-  kind: "content" | "reasoning";
-  text: string;
-}
-
-export interface ToolEvent extends EventBase {
-  type: "tool";
-  id: string;
-  name: string;
-  arguments: unknown;
-  output: string;
-  is_error: boolean;
-}
-
-export interface StepEvent extends EventBase {
-  type: "step";
-  step: number;
-  usage: Record<string, number>;
-  cost: number;
-}
-
-export interface DoneEvent extends EventBase {
-  type: "done";
-  answer: string;
-  stopReason: string;
-  steps: number;
-  usage: Record<string, number>;
-  cost: number;
-  error: string | null;
-}
-
-export interface ErrorEvent extends EventBase {
-  type: "error";
-  code: "timeout" | "cancelled" | "output_limit" | "internal_error" | string;
-  error: string;
-}
-
-export type RunEvent = StartEvent | DeltaEvent | ToolEvent | StepEvent | DoneEvent | ErrorEvent;
+export type {
+  DeltaEvent,
+  DoneEvent,
+  ErrorEvent,
+  RunEvent,
+  StartEvent,
+  StepEvent,
+  ToolEvent,
+} from "./events.generated";
+import type {DoneEvent, RunEvent} from "./events.generated";
 
 export interface Health {
   status: "ok" | string;

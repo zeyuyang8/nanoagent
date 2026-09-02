@@ -3,22 +3,32 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
-from typing import Any, Protocol
+from importlib.resources import files
+from typing import Any, cast, Protocol, TYPE_CHECKING
 from uuid import uuid4
 
-from nanoagent.harness.config import WebConfig
-from nanoagent.harness.core.agent import Agent, AgentResult, StopReason
-from nanoagent.harness.core.hooks import get_hooks
-from nanoagent.harness.core.model import Model
-from nanoagent.harness.run.build import build_prompt_and_tools
+from jsonschema import Draft202012Validator
+
+from nanoagent.core.agent import Agent
+from nanoagent.runtime.model import Model
+from nanoagent.runtime.build import build_agent
+from nanoagent.runtime.events import RunEvents
+from nanoagent.web.config import WebConfig
+
+if TYPE_CHECKING:
+    from nanoagent.core.agent import AgentResult
 
 logger = logging.getLogger(__name__)
 
-_ROLES = {"user", "assistant", "tool"}
 _TERMINAL_TYPES = {"done", "error"}
+_REQUEST_SCHEMA = json.loads(
+    files("nanoagent.web.schema").joinpath("run-request.schema.json").read_text(encoding="utf-8")
+)
+_REQUEST_VALIDATOR = Draft202012Validator(_REQUEST_SCHEMA)
 
 
 class ValidationError(ValueError):
@@ -60,48 +70,19 @@ def validate_run_request(value: Any) -> RunRequest:
     System messages are rejected in history. Callers use ``instructions`` instead, which is
     appended to the operator-owned base prompt and cannot replace its safety policy.
     """
-    if not isinstance(value, dict):
-        raise ValidationError("request body must be a JSON object")
-    input_text = value.get("input")
-    if not isinstance(input_text, str) or not input_text.strip():
+    errors = sorted(_REQUEST_VALIDATOR.iter_errors(value), key=lambda error: list(error.path))
+    if errors:
+        error = errors[0]
+        location = ".".join(str(part) for part in error.path)
+        raise ValidationError(f"{location + ': ' if location else ''}{error.message}")
+
+    body = cast(dict[str, Any], value)
+    input_text = cast(str, body["input"])
+    if not input_text.strip():
         raise ValidationError("input must be a non-empty string")
-    if len(input_text) > 100_000:
-        raise ValidationError("input must be 100000 characters or fewer")
-
-    instructions = value.get("instructions")
-    if instructions is not None and not isinstance(instructions, str):
-        raise ValidationError("instructions must be a string")
-    if isinstance(instructions, str) and len(instructions) > 20_000:
-        raise ValidationError("instructions must be 20000 characters or fewer")
-
-    raw_messages = value.get("messages", [])
-    if not isinstance(raw_messages, list):
-        raise ValidationError("messages must be an array")
-    if len(raw_messages) > 200:
-        raise ValidationError("messages must contain 200 entries or fewer")
-    messages: list[dict[str, Any]] = []
-    for index, raw in enumerate(raw_messages):
-        if not isinstance(raw, dict):
-            raise ValidationError(f"messages[{index}] must be an object")
-        role = raw.get("role")
-        content = raw.get("content")
-        if role not in _ROLES:
-            raise ValidationError(f"messages[{index}].role must be user, assistant, or tool")
-        if not isinstance(content, str):
-            raise ValidationError(f"messages[{index}].content must be a string")
-        if len(content) > 100_000:
-            raise ValidationError(f"messages[{index}].content must be 100000 characters or fewer")
-        message = {"role": role, "content": content}
-        if role == "tool":
-            tool_call_id = raw.get("tool_call_id")
-            if not isinstance(tool_call_id, str) or not tool_call_id:
-                raise ValidationError(f"messages[{index}].tool_call_id is required for tool messages")
-            message["tool_call_id"] = tool_call_id
-        messages.append(message)
-
-    metadata = value.get("metadata")
-    if metadata is not None and not isinstance(metadata, dict):
-        raise ValidationError("metadata must be an object")
+    instructions = cast(str | None, body.get("instructions"))
+    messages = [dict(message) for message in cast(list[dict[str, Any]], body.get("messages", []))]
+    metadata = cast(dict[str, Any] | None, body.get("metadata"))
     return RunRequest(input=input_text, messages=messages, instructions=instructions, metadata=metadata)
 
 
@@ -111,24 +92,10 @@ class _ConfiguredAgentFactory:
         self._model = Model.from_config(cfg.model)
 
     def __call__(self, instructions: str | None) -> tuple[Agent, str]:
-        prompt, tools = build_prompt_and_tools(
-            self._cfg.agent,
-            self._cfg.tools,
-            self._cfg.tools_dir,
-            self._cfg.allowed_tools,
-        )
-        if instructions and instructions.strip():
-            prompt = f"{prompt.rstrip()}\n\nApplication instructions:\n{instructions.strip()}"
-        return Agent(
-            self._model,
-            tools,
-            system_prompt=prompt,
-            max_steps=self._cfg.agent.max_steps,
-            cost_limit=self._cfg.agent.cost_limit,
-            token_limit=self._cfg.agent.token_limit,
-            context_window=self._cfg.agent.context_window,
-            hooks=get_hooks(self._cfg.agent.hooks),
-        ), prompt
+        clean_instructions = instructions.strip() if instructions else ""
+        suffix = f"Application instructions:\n{clean_instructions}" if clean_instructions else None
+        agent = build_agent(self._cfg, model=self._model, prompt_suffix=suffix)
+        return agent, agent.system_prompt
 
     async def aclose(self) -> None:
         await self._model.aclose()
@@ -205,11 +172,26 @@ class RunHost:
         request: RunRequest,
         queue: asyncio.Queue[dict[str, Any] | None],
     ) -> None:
-        tool_cursor = 0
         output_chars = 0
+        terminal_emitted = False
 
         def emit(event_type: str, **fields: Any) -> None:
             queue.put_nowait({"type": event_type, "runId": run_id, **fields})
+
+        def project(_label: str | None, **event: Any) -> None:
+            nonlocal terminal_emitted
+            event_type = event.pop("type")
+            if event_type == "done" and event.get("error"):
+                terminal_emitted = True
+                detail = str(event["error"])
+                code = "output_limit" if detail.startswith("OutputLimitError:") else "agent_error"
+                emit("error", code=code, error=detail.partition(": ")[2] or detail)
+                return
+            if event_type in _TERMINAL_TYPES:
+                terminal_emitted = True
+            emit(event_type, **event)
+
+        projected = RunEvents(project, None)
 
         def on_delta(kind: str, text: str) -> None:
             nonlocal output_chars
@@ -219,15 +201,7 @@ class RunHost:
                 output_chars += len(text)
                 if output_chars > self.cfg.max_output_chars:
                     raise OutputLimitError("agent output exceeded the configured character limit")
-            emit("delta", kind=kind, text=text)
-
-        def on_step(result: AgentResult) -> None:
-            nonlocal tool_cursor
-            for tool in result.tool_calls[tool_cursor:]:
-                emit("tool", **tool)
-            tool_cursor = len(result.tool_calls)
-            if result.stop_reason is StopReason.RUNNING:
-                emit("step", step=result.steps, usage=result.usage, cost=result.cost)
+            projected.on_delta(kind, text)
 
         emit("start", metadata=request.metadata)
         try:
@@ -238,30 +212,20 @@ class RunHost:
                     *[dict(message) for message in request.messages],
                 ]
                 async with asyncio.timeout(self.cfg.request_timeout):
-                    result = await agent.run(
+                    await agent.run(
                         request.input,
                         messages=transcript,
                         on_delta=on_delta,
-                        on_step=on_step,
+                        on_step=projected.on_step,
                     )
-            emit(
-                "done",
-                answer=result.answer,
-                stopReason=result.stop_reason.value,
-                steps=result.steps,
-                usage=result.usage,
-                cost=result.cost,
-                error=result.error,
-            )
         except TimeoutError:
             emit("error", code="timeout", error="Agent run timed out")
-        except OutputLimitError:
-            emit("error", code="output_limit", error="Agent output exceeded its limit")
         except asyncio.CancelledError:
             emit("error", code="cancelled", error="Agent run was cancelled")
         except Exception:
-            logger.exception("web agent run %s failed", run_id)
-            emit("error", code="internal_error", error="Agent run failed")
+            if not terminal_emitted:
+                logger.exception("web agent run %s failed", run_id)
+                emit("error", code="internal_error", error="Agent run failed")
         finally:
             self._active.pop(run_id, None)
             queue.put_nowait(None)

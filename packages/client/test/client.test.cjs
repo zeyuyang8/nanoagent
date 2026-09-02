@@ -18,7 +18,7 @@ describe("NanoAgentClient", () => {
       ": heart",
       "beat\n\nevent: delta\ndata: {\"type\":\"delta\",\"runId\":\"r1\",",
       "\"kind\":\"content\",\"text\":\"hi\"}\n\n",
-      "event: done\ndata: {\"type\":\"done\",\"runId\":\"r1\",\"answer\":\"hi\",\"stopReason\":\"answer\",\"steps\":1,\"usage\":{},\"cost\":0,\"error\":null}\n\n",
+      "event: done\ndata: {\"type\":\"done\",\"runId\":\"r1\",\"answer\":\"hi\",\"stop_reason\":\"answer\",\"steps\":1,\"usage\":{},\"cost\":0,\"error\":null}\n\n",
     ]);
     const client = new NanoAgentClient({baseUrl: "http://agent", fetch});
     const seen = [];

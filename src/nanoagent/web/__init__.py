@@ -6,6 +6,14 @@ Go, Python, or any other HTTP client can consume.
 """
 
 from nanoagent.web.app import create_app
+from nanoagent.web.config import WebConfig
 from nanoagent.web.runtime import RunHost, RunRequest, ValidationError, validate_run_request
 
-__all__ = ["RunHost", "RunRequest", "ValidationError", "create_app", "validate_run_request"]
+__all__ = [
+    "RunHost",
+    "RunRequest",
+    "ValidationError",
+    "WebConfig",
+    "create_app",
+    "validate_run_request",
+]

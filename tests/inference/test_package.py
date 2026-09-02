@@ -32,9 +32,8 @@ def test_importing_the_package_pulls_in_no_optional_or_provider_dependency() -> 
     any of them would make `import nanoagent.inference` drag the serve stack in, so this is checked
     in a clean interpreter rather than this session (pytest has already imported plenty).
 
-    ``slimconfig`` is NOT in the list: nanoagent.harness.config imports it at module scope, so it is a
-    hard dependency of the package either way and asserting otherwise would only be true of an
-    import path nobody takes.
+    ``omegaconf`` is not in the list: inference configuration uses it directly. The separate core
+    import test below verifies that the agent loop itself does not load configuration libraries.
     """
     probe = (
         "import nanoagent.inference, sys; print(','.join(m for m in "
@@ -42,6 +41,15 @@ def test_importing_the_package_pulls_in_no_optional_or_provider_dependency() -> 
     )
     leaked = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, check=True).stdout.strip()
     assert leaked == "", f"import nanoagent.inference pulled in: {leaked}"
+
+
+def test_importing_core_loads_no_configuration_or_provider_dependency() -> None:
+    probe = (
+        "import nanoagent, sys; print(','.join(m for m in "
+        "('openai', 'httpx', 'omegaconf', 'slimconfig') if m in sys.modules))"
+    )
+    leaked = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, check=True).stdout.strip()
+    assert leaked == "", f"import nanoagent pulled in: {leaked}"
 
 
 def test_building_the_sglang_backend_is_what_loads_openai(monkeypatch) -> None:
