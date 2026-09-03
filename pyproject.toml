@@ -57,6 +57,9 @@ classifiers = [
 # ASGI web host for server-side application integrations. Kept optional so the batch / training
 # package does not acquire an HTTP framework merely because it imports nanoagent.
 web = ["jsonschema>=4.23", "starlette>=0.41", "uvicorn>=0.30"]
+# Optional third-party harness. It is launched behind the subprocess boundary rather than
+# imported into NanoAgent's server process, but this extra makes a single-environment setup easy.
+hermes = ["hermes-agent==0.19.0"]
 # The serve side (nanoagent.inference.serve / router): `ensure_weights` fetches missing shards
 # through huggingface_hub, and mode=router/multinode fronts the engines with sglang_router. SGLang
 # itself is NOT a dependency — the engine is exec'd as the `sglang serve` CLI, so the serving env
@@ -93,6 +96,7 @@ nanoagent = "nanoagent.cli.main:main"
 # The coding-CLI face of the same agent, in Claude Code's flag grammar — its own name because
 # `mgen -p "..."` is what a script written against `claude` already says.
 mgen = "nanoagent.cli.mgen:main"
+nanoagent-hermes-runner = "nanoagent.adapters.hermes:main"
 
 [tool.setuptools.dynamic]
 version = {attr = "nanoagent.__version__"}

@@ -47,4 +47,25 @@ describe("NanoAgentClient", () => {
     assert.equal(request.url, "http://agent/v1/runs/run%2Fid");
     assert.equal(request.options.headers.Authorization, "Bearer secret");
   });
+
+  it("discovers server-owned harness profiles", async () => {
+    let request;
+    const fetch = async (url, options) => {
+      request = {url, options};
+      return new Response(JSON.stringify({
+        defaultProfile: "native-fast",
+        profiles: [{
+          id: "native-fast", label: "Fast", harness: "native", model: "test",
+          available: true, unavailableReason: null,
+          capabilities: {streaming: true, reasoning: true, tools: true, usage: true,
+            cancellation: true, history: true},
+        }],
+      }), {status: 200, headers: {"content-type": "application/json"}});
+    };
+    const client = new NanoAgentClient({baseUrl: "http://agent", token: "secret", fetch});
+    const catalog = await client.profiles();
+    assert.equal(catalog.defaultProfile, "native-fast");
+    assert.equal(request.url, "http://agent/v1/profiles");
+    assert.equal(request.options.headers.Authorization, "Bearer secret");
+  });
 });

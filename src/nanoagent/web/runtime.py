@@ -5,22 +5,18 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from importlib.resources import files
-from typing import Any, cast, Protocol, TYPE_CHECKING
+from typing import Any, cast
 from uuid import uuid4
 
 from jsonschema import Draft202012Validator
 
-from nanoagent.core.agent import Agent
-from nanoagent.runtime.model import Model
-from nanoagent.runtime.build import build_agent
-from nanoagent.runtime.events import RunEvents
+from nanoagent.runtime.native_runner import AgentFactory
+from nanoagent.runtime.runner import Runner, RunnerError, RunnerRequest
+from nanoagent.runtime.runner_factory import RunnerProfile, RunnerRegistry
 from nanoagent.web.config import WebConfig
-
-if TYPE_CHECKING:
-    from nanoagent.core.agent import AgentResult
 
 logger = logging.getLogger(__name__)
 
@@ -47,21 +43,7 @@ class RunRequest:
     messages: list[dict[str, Any]]
     instructions: str | None = None
     metadata: dict[str, Any] | None = None
-
-
-class AgentLike(Protocol):
-    async def run(
-        self,
-        task: str | None = None,
-        *,
-        on_step: Callable[[AgentResult], None] | None = None,
-        messages: list[dict[str, Any]] | None = None,
-        on_delta: Callable[[str, str], None] | None = None,
-    ) -> AgentResult: ...
-
-
-class AgentFactory(Protocol):
-    def __call__(self, instructions: str | None) -> tuple[AgentLike, str]: ...
+    profile: str | None = None
 
 
 def validate_run_request(value: Any) -> RunRequest:
@@ -83,22 +65,14 @@ def validate_run_request(value: Any) -> RunRequest:
     instructions = cast(str | None, body.get("instructions"))
     messages = [dict(message) for message in cast(list[dict[str, Any]], body.get("messages", []))]
     metadata = cast(dict[str, Any] | None, body.get("metadata"))
-    return RunRequest(input=input_text, messages=messages, instructions=instructions, metadata=metadata)
-
-
-class _ConfiguredAgentFactory:
-    def __init__(self, cfg: WebConfig) -> None:
-        self._cfg = cfg
-        self._model = Model.from_config(cfg.model)
-
-    def __call__(self, instructions: str | None) -> tuple[Agent, str]:
-        clean_instructions = instructions.strip() if instructions else ""
-        suffix = f"Application instructions:\n{clean_instructions}" if clean_instructions else None
-        agent = build_agent(self._cfg, model=self._model, prompt_suffix=suffix)
-        return agent, agent.system_prompt
-
-    async def aclose(self) -> None:
-        await self._model.aclose()
+    profile = cast(str | None, body.get("profile"))
+    return RunRequest(
+        input=input_text,
+        messages=messages,
+        instructions=instructions,
+        metadata=metadata,
+        profile=profile,
+    )
 
 
 @dataclass
@@ -130,12 +104,36 @@ class ActiveRun:
 
 
 class RunHost:
-    """Own active runs, concurrency, cancellation and one long-lived model connection pool."""
+    """Own active runs and expose any configured harness through one event protocol."""
 
-    def __init__(self, cfg: WebConfig, *, agent_factory: AgentFactory | None = None) -> None:
+    def __init__(
+        self,
+        cfg: WebConfig,
+        *,
+        runner: Runner | None = None,
+        registry: RunnerRegistry | None = None,
+        agent_factory: AgentFactory | None = None,
+    ) -> None:
+        if sum(value is not None for value in (runner, registry, agent_factory)) > 1:
+            raise ValueError("pass only one of runner, registry, or agent_factory")
         self.cfg = cfg
-        self._configured_factory = None if agent_factory is not None else _ConfiguredAgentFactory(cfg)
-        self._factory = agent_factory or self._configured_factory
+        if registry is not None:
+            self._runners = registry
+        elif runner is None:
+            self._runners = RunnerRegistry.from_config(
+                cfg,
+                cfg.profiles,
+                cfg.default_profile,
+                agent_factory=agent_factory,
+            )
+        else:
+            profile_cfg = cfg.profiles[cfg.default_profile]
+            self._runners = RunnerRegistry.single(
+                runner,
+                profile_id=cfg.default_profile,
+                label=profile_cfg.label,
+                model=profile_cfg.model,
+            )
         self._semaphore = asyncio.Semaphore(cfg.max_concurrency)
         self._active: dict[str, asyncio.Task[None]] = {}
 
@@ -143,10 +141,29 @@ class RunHost:
     def active_count(self) -> int:
         return len(self._active)
 
+    @property
+    def runner_name(self) -> str:
+        return self._runners.resolve(None).harness
+
+    @property
+    def capabilities(self) -> dict[str, bool]:
+        return self._runners.resolve(None).runner.capabilities.as_dict()
+
+    @property
+    def profiles(self) -> dict[str, Any]:
+        return self._runners.public()
+
     async def start(self, request: RunRequest) -> ActiveRun:
+        try:
+            profile = self._runners.resolve(request.profile)
+        except KeyError as error:
+            raise ValidationError(str(error)) from None
         run_id = str(uuid4())
         queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
-        task = asyncio.create_task(self._run(run_id, request, queue), name=f"nanoagent-run-{run_id}")
+        task = asyncio.create_task(
+            self._run(run_id, request, profile, queue),
+            name=f"nanoagent-run-{run_id}",
+        )
         self._active[run_id] = task
         return ActiveRun(run_id, queue, task, self.cfg.heartbeat_seconds)
 
@@ -163,69 +180,95 @@ class RunHost:
             task.cancel()
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
-        if self._configured_factory is not None:
-            await self._configured_factory.aclose()
+        await self._runners.aclose()
 
     async def _run(
         self,
         run_id: str,
         request: RunRequest,
+        profile: RunnerProfile,
         queue: asyncio.Queue[dict[str, Any] | None],
     ) -> None:
         output_chars = 0
-        terminal_emitted = False
 
         def emit(event_type: str, **fields: Any) -> None:
             queue.put_nowait({"type": event_type, "runId": run_id, **fields})
 
-        def project(_label: str | None, **event: Any) -> None:
-            nonlocal terminal_emitted
-            event_type = event.pop("type")
-            if event_type == "done" and event.get("error"):
-                terminal_emitted = True
-                detail = str(event["error"])
-                code = "output_limit" if detail.startswith("OutputLimitError:") else "agent_error"
-                emit("error", code=code, error=detail.partition(": ")[2] or detail)
-                return
-            if event_type in _TERMINAL_TYPES:
-                terminal_emitted = True
-            emit(event_type, **event)
-
-        projected = RunEvents(project, None)
-
-        def on_delta(kind: str, text: str) -> None:
+        def progress(event: dict[str, Any]) -> None:
             nonlocal output_chars
-            if kind == "reasoning" and not self.cfg.include_reasoning:
-                return
-            if kind == "content":
-                output_chars += len(text)
-                if output_chars > self.cfg.max_output_chars:
-                    raise OutputLimitError("agent output exceeded the configured character limit")
-            projected.on_delta(kind, text)
+            event_type = event["type"]
+            fields = {key: value for key, value in event.items() if key != "type"}
+            if event_type == "delta":
+                kind = fields["kind"]
+                text = fields["text"]
+                if kind == "reasoning" and not self.cfg.include_reasoning:
+                    return
+                if kind == "content":
+                    output_chars += len(text)
+                    if output_chars > self.cfg.max_output_chars:
+                        raise OutputLimitError(
+                            "agent output exceeded the configured character limit"
+                        )
+            emit(event_type, **fields)
 
-        emit("start", metadata=request.metadata)
+        runner = profile.runner
+        emit(
+            "start",
+            metadata=request.metadata,
+            profile=profile.id,
+            harness=profile.harness,
+            model=profile.model,
+        )
         try:
+            if request.messages and not runner.capabilities.history:
+                raise RunnerError(
+                    f"{runner.name} harness does not support conversation history",
+                    code="unsupported_feature",
+                )
             async with self._semaphore:
-                agent, system_prompt = self._factory(request.instructions)
-                transcript = [
-                    {"role": "system", "content": system_prompt},
-                    *[dict(message) for message in request.messages],
-                ]
                 async with asyncio.timeout(self.cfg.request_timeout):
-                    await agent.run(
-                        request.input,
-                        messages=transcript,
-                        on_delta=on_delta,
-                        on_step=projected.on_step,
+                    result = await runner.run(
+                        RunnerRequest(
+                            input=request.input,
+                            messages=request.messages,
+                            instructions=request.instructions,
+                            metadata=request.metadata,
+                        ),
+                        progress,
                     )
+            if len(result.answer) > self.cfg.max_output_chars:
+                raise OutputLimitError("agent output exceeded the configured character limit")
+            if result.error:
+                code = (
+                    "output_limit"
+                    if result.error.startswith("OutputLimitError:")
+                    else "agent_error"
+                )
+                emit("error", code=code, error=result.error.partition(": ")[2] or result.error)
+            else:
+                emit(
+                    "done",
+                    answer=result.answer,
+                    stop_reason=result.stop_reason,
+                    steps=result.steps,
+                    usage=result.usage,
+                    cost=result.cost,
+                    error=None,
+                    profile=profile.id,
+                    harness=profile.harness,
+                    model=profile.model,
+                )
         except TimeoutError:
             emit("error", code="timeout", error="Agent run timed out")
         except asyncio.CancelledError:
             emit("error", code="cancelled", error="Agent run was cancelled")
+        except OutputLimitError as error:
+            emit("error", code="output_limit", error=str(error))
+        except RunnerError as error:
+            emit("error", code=error.code, error=str(error))
         except Exception:
-            if not terminal_emitted:
-                logger.exception("web agent run %s failed", run_id)
-                emit("error", code="internal_error", error="Agent run failed")
+            logger.exception("web agent run %s failed", run_id)
+            emit("error", code="internal_error", error="Agent run failed")
         finally:
             self._active.pop(run_id, None)
             queue.put_nowait(None)

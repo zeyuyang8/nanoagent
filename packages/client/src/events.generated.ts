@@ -11,6 +11,9 @@ export type StartEvent = EventBase & {
   metadata: {
     [k: string]: unknown;
   } | null;
+  profile: string;
+  harness: string;
+  model: string;
   [k: string]: unknown;
 };
 export type DeltaEvent = EventBase & {
@@ -43,6 +46,9 @@ export type DoneEvent = EventBase & {
   usage: Usage;
   cost: number;
   error: string | null;
+  profile: string;
+  harness: string;
+  model: string;
   [k: string]: unknown;
 };
 export type ErrorEvent = EventBase & {

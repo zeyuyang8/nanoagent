@@ -1,6 +1,44 @@
 # Internal NanoAgent service for a web application. The application server calls this process;
 # browsers never do. Model, tool and budget policy live here and cannot be overridden per request.
 
+default_profile: native-deepseek
+profiles:
+  native-deepseek:
+    label: DeepSeek V4 Flash · NanoAgent
+    model: deepseek/deepseek-v4-flash-0731
+    harness:
+      type: native
+      command: null
+      cwd: null
+      options: {}
+    model_overrides: {}
+  hermes-deepseek:
+    label: DeepSeek V4 Flash · Hermes Agent
+    model: deepseek/deepseek-v4-flash-0731
+    harness:
+      type: hermes
+      command: null
+      cwd: null
+      options:
+        provider: openrouter
+        toolsets: []
+    model_overrides: {}
+  pi-deepseek:
+    label: DeepSeek V4 Flash · PI
+    model: deepseek/deepseek-v4-flash-0731
+    harness:
+      type: pi
+      # Use the companion package from this checkout instead of relying on a
+      # globally linked npm executable.
+      command: [node, packages/pi-runner/dist/index.js]
+      cwd: null
+      options:
+        provider: openrouter
+        api_key_env: OPENROUTER_API_KEY
+        thinking_level: "off"
+        system_prompt: You are an assistant embedded in a collaborative knowledge application.
+    model_overrides: {}
+
 defaults:
   - configs/models/openrouter.yaml
 

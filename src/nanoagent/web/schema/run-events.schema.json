@@ -27,9 +27,12 @@
           "type": "object",
           "properties": {
             "type": {"const": "start"},
-            "metadata": {"type": ["object", "null"], "additionalProperties": true}
+            "metadata": {"type": ["object", "null"], "additionalProperties": true},
+            "profile": {"type": "string"},
+            "harness": {"type": "string"},
+            "model": {"type": "string"}
           },
-          "required": ["type", "metadata"]
+          "required": ["type", "metadata", "profile", "harness", "model"]
         }
       ]
     },
@@ -91,9 +94,12 @@
             "steps": {"type": "integer", "minimum": 0},
             "usage": {"$ref": "#/$defs/Usage"},
             "cost": {"type": "number", "minimum": 0},
-            "error": {"type": ["string", "null"]}
+            "error": {"type": ["string", "null"]},
+            "profile": {"type": "string"},
+            "harness": {"type": "string"},
+            "model": {"type": "string"}
           },
-          "required": ["type", "answer", "stop_reason", "steps", "usage", "cost", "error"]
+          "required": ["type", "answer", "stop_reason", "steps", "usage", "cost", "error", "profile", "harness", "model"]
         }
       ]
     },

@@ -15,6 +15,7 @@ export type Message = {
 
 export interface RunRequest {
   input: string;
+  profile?: string;
   instructions?: string;
   /**
    * @maxItems 200

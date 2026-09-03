@@ -89,18 +89,76 @@ for await (const event of agent.stream(
 }
 ```
 
-The server provides `POST /v1/runs` as an SSE stream, `DELETE /v1/runs/:id` for explicit
-cancellation, and `GET /health`. Disconnecting the stream also cancels its run. Every event is a
+The server provides `GET /v1/profiles` for discovery, `POST /v1/runs` as an SSE stream,
+`DELETE /v1/runs/:id` for explicit cancellation, and `GET /health`. Disconnecting the stream also cancels its run. Every event is a
 typed discriminated union: `start`, `delta`, `tool`, `step`, `done`, or `error`.
 
 The YAML owns the backend, credentials, tools and budgets. A request can carry prior messages and
-additional application instructions, but cannot select a model or grant itself a tool. Bind to
+additional application instructions and select one server-approved `profile`, but cannot submit
+arbitrary model configuration, commands, credentials, or tools. Bind to
 loopback for a same-container application; a non-loopback bind requires `api_token`. The included
 `configs/web_openrouter.yaml` deliberately starts with no tools, no checkout context, one model
 turn and hidden reasoning.
 
 `@nanoagent/client` is a server-side package. A browser should call its own application backend,
 which applies user identity, tenancy and product policy before forwarding a run to NanoAgent.
+
+### Selecting a harness and model profile
+
+Each profile is a server-owned harness/model pairing. The client discovers safe public metadata
+with `client.profiles()` and sends only its ID, for example
+`client.run({input: "...", profile: "pi-deepseek"})`. The default profile keeps NanoAgent's own
+loop, while optional profiles expose Hermes Agent and PI through the same event protocol:
+
+```yaml
+default_profile: native-deepseek
+profiles:
+  native-deepseek:
+    label: DeepSeek V4 Flash · NanoAgent
+    model: deepseek/deepseek-v4-flash-0731
+    harness: {type: native, command: null, cwd: null, options: {}}
+    model_overrides: {}
+  hermes-deepseek:
+    label: DeepSeek V4 Flash · Hermes Agent
+    model: deepseek/deepseek-v4-flash-0731
+    harness: {type: hermes, command: null, cwd: null, options: {provider: openrouter}}
+    model_overrides: {}
+  pi-deepseek:
+    label: DeepSeek V4 Flash · PI
+    model: deepseek/deepseek-v4-flash-0731
+    harness:
+      type: pi
+      command: [node, packages/pi-runner/dist/index.js]
+      cwd: null
+      options: {provider: openrouter, api_key_env: OPENROUTER_API_KEY}
+    model_overrides: {}
+```
+
+Install Hermes Agent as an optional, isolated one-shot runner:
+
+```bash
+pip install "nanoagent[web,hermes]"
+```
+
+PI runs in Node, so install its companion package beside the server. The checkout config above
+calls its built entry point directly and does not require a global npm link:
+
+```bash
+cd packages/pi-runner && npm install
+cd ../..
+nanoagent web web_cfg=configs/web_openrouter.yaml
+```
+
+Mochi can keep one server-side NanoAgent client and store a profile ID per workspace agent;
+changing harnesses does not change its HTTP/SSE API. The profile endpoint reports availability
+and capabilities. Hermes and PI preserve user/assistant history in their one-shot prompt. Hermes
+supports final answers, tools and usage, while PI supports streaming and reasoning; PI tool
+bridging stays disabled until its workspace and permission semantics can be enforced consistently.
+
+Third-party adapters use `nanoagent.runner.v1`: one JSON request line on stdin and normalized
+`delta`, `tool`, `step`, then `done` or `error` JSON lines on stdout. Diagnostic logs belong on
+stderr. NanoAgent starts adapters without a shell, enforces its own timeout/output limits, and
+terminates the child when the caller cancels or disconnects.
 
 Any leaf of a config can be overridden inline on any command:
 
@@ -257,6 +315,7 @@ src/nanoagent/
 ├── runtime/       configuration, assembly, events, trajectories, batch runs
 ├── tools/         built-in tool implementations
 ├── cli/           terminal commands and REPL
+├── adapters/      subprocess adapters for optional third-party harnesses
 └── web/           internal HTTP/SSE adapter over the runtime
 ```
 
@@ -267,6 +326,7 @@ src/nanoagent/
 | `nanoagent.runtime` | Typed configuration, one agent factory, lifecycle events, trajectories, and batch execution. |
 | `nanoagent.tools` | Opt-in `bash`, `code`, file, write, and skill implementations. |
 | `nanoagent.cli` | `run`, `mgen`, chat, browser, and terminal rendering. |
+| `nanoagent.adapters` | Small protocol translators for isolated third-party harnesses. |
 | `nanoagent.web` | Server-owned configuration, bounded run lifecycle, cancellation, and the internal SSE API. |
 
 Dependencies point inward: CLI and web use runtime; runtime assembles core, inference, and tools;

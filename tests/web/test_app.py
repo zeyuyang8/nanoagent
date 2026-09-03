@@ -15,6 +15,16 @@ def test_health_and_authenticated_stream() -> None:
         assert health.status_code == 200
         assert health.json()["service"] == "nanoagent"
         assert health.json()["apiVersion"] == "v1"
+        assert health.json()["harness"] == "native"
+        assert health.json()["capabilities"]["streaming"] is True
+
+        assert client.get("/v1/profiles").status_code == 401
+        profiles = client.get(
+            "/v1/profiles", headers={"Authorization": "Bearer secret"}
+        )
+        assert profiles.status_code == 200
+        assert profiles.json()["defaultProfile"] == "native-test"
+        assert profiles.json()["profiles"][0]["model"] == "test"
 
         assert client.post("/v1/runs", json={"input": "hi"}).status_code == 401
         response = client.post(

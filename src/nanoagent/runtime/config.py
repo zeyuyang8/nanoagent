@@ -161,6 +161,51 @@ class AgentDefinitionConfig:
 
 
 @dataclass
+class HarnessConfig:
+    """Select the agent implementation behind NanoAgent's stable run API."""
+
+    type: str = MISSING
+    # null uses the adapter's default executable. A list is executed directly, never by a shell.
+    command: list[str] | None = MISSING
+    cwd: str | None = MISSING
+    # Adapter-owned, server-side settings. They are never accepted from a run request.
+    options: dict[str, Any] = MISSING
+
+    def __post_init__(self) -> None:
+        if self.type not in {MISSING, "native", "hermes", "pi"}:
+            raise ValueError(f"harness.type must be native, hermes, or pi; got {self.type!r}")
+        if isinstance(self.command, list) and (
+            not self.command or any(not isinstance(part, str) or not part for part in self.command)
+        ):
+            raise ValueError("harness.command must be null or a non-empty list of strings")
+        if self.type == "native" and self.command is not None:
+            raise ValueError("harness.command must be null for the native harness")
+
+
+@dataclass
+class HarnessProfileConfig:
+    """One server-approved harness/model combination exposed to API clients."""
+
+    label: str = MISSING
+    model: str = MISSING
+    harness: HarnessConfig = field(default_factory=HarnessConfig)
+    # Native profiles may override ModelConfig fields such as base_url or temperature.
+    model_overrides: dict[str, Any] = MISSING
+
+    def __post_init__(self) -> None:
+        if isinstance(self.label, str) and not self.label.strip():
+            raise ValueError("profile label must be non-empty")
+        if isinstance(self.model, str) and not self.model.strip():
+            raise ValueError("profile model must be non-empty")
+        if (
+            self.harness.type not in {MISSING, "native"}
+            and isinstance(self.model_overrides, dict)
+            and self.model_overrides
+        ):
+            raise ValueError("model_overrides are only valid for native harness profiles")
+
+
+@dataclass
 class RunConfig(AgentDefinitionConfig):
     """An agent definition plus what a CLI run should execute and persist."""
 

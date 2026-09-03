@@ -12,8 +12,11 @@ const nanoagent = new NanoAgentClient({
   token: process.env.NANOAGENT_API_TOKEN,
 });
 
+const catalog = await nanoagent.profiles();
+const profile = catalog.defaultProfile;
+
 for await (const event of nanoagent.stream(
-  {input: "Summarize this", messages: priorMessages, instructions: workspaceAgent.instructions},
+  {input: "Summarize this", messages: priorMessages, instructions: workspaceAgent.instructions, profile},
   {signal: requestAbortSignal},
 )) {
   if (event.type === "delta" && event.kind === "content") {
@@ -24,3 +27,5 @@ for await (const event of nanoagent.stream(
 
 Use this package from the application server. Do not put the NanoAgent URL or bearer token in a
 browser bundle; the application server remains the authentication, tenancy and policy boundary.
+Clients select only IDs returned by `profiles()`; executable commands, provider credentials, and
+tool policy remain private server configuration.

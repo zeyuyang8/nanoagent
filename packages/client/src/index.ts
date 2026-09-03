@@ -18,6 +18,39 @@ export interface Health {
   apiVersion: "v1" | string;
   activeRuns: number;
   maxConcurrency: number;
+  harness: string;
+  capabilities: {
+    streaming: boolean;
+    reasoning: boolean;
+    tools: boolean;
+    usage: boolean;
+    cancellation: boolean;
+    history: boolean;
+  };
+}
+
+export interface ProfileCapabilities {
+  streaming: boolean;
+  reasoning: boolean;
+  tools: boolean;
+  usage: boolean;
+  cancellation: boolean;
+  history: boolean;
+}
+
+export interface HarnessProfile {
+  id: string;
+  label: string;
+  harness: string;
+  model: string;
+  available: boolean;
+  unavailableReason: string | null;
+  capabilities: ProfileCapabilities;
+}
+
+export interface ProfileCatalog {
+  defaultProfile: string;
+  profiles: HarnessProfile[];
 }
 
 export interface ClientOptions {
@@ -105,6 +138,15 @@ export class NanoAgentClient {
     const response = await this.fetchImpl(`${this.baseUrl}/health`, {signal: options.signal});
     if (!response.ok) throw await responseError(response);
     return response.json() as Promise<Health>;
+  }
+
+  async profiles(options: StreamOptions = {}): Promise<ProfileCatalog> {
+    const response = await this.fetchImpl(`${this.baseUrl}/v1/profiles`, {
+      headers: this.headers(),
+      signal: options.signal,
+    });
+    if (!response.ok) throw await responseError(response);
+    return response.json() as Promise<ProfileCatalog>;
   }
 
   async *stream(request: RunRequest, options: StreamOptions = {}): AsyncGenerator<RunEvent> {

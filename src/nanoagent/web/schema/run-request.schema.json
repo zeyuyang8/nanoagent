@@ -6,6 +6,7 @@
   "additionalProperties": false,
   "properties": {
     "input": {"type": "string", "minLength": 1, "maxLength": 100000},
+    "profile": {"type": "string", "minLength": 1, "maxLength": 100},
     "instructions": {"type": "string", "maxLength": 20000},
     "messages": {
       "type": "array",

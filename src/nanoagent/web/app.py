@@ -46,8 +46,15 @@ def create_app(cfg: WebConfig, *, host: RunHost | None = None) -> Any:
                 "apiVersion": "v1",
                 "activeRuns": run_host.active_count,
                 "maxConcurrency": cfg.max_concurrency,
+                "harness": run_host.runner_name,
+                "capabilities": run_host.capabilities,
             }
         )
+
+    async def profiles(request: Request) -> JSONResponse:
+        if not authorized(request):
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        return JSONResponse(run_host.profiles)
 
     async def start_run(request: Request) -> JSONResponse | StreamingResponse:
         if not authorized(request):
@@ -100,6 +107,7 @@ def create_app(cfg: WebConfig, *, host: RunHost | None = None) -> Any:
     return Starlette(
         routes=[
             Route("/health", health, methods=["GET"]),
+            Route("/v1/profiles", profiles, methods=["GET"]),
             Route("/v1/runs", start_run, methods=["POST"]),
             Route("/v1/runs/{run_id}", cancel_run, methods=["DELETE"]),
         ],

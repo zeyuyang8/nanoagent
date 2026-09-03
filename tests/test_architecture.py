@@ -8,6 +8,7 @@ from pathlib import Path
 PACKAGE_ROOT = Path(__file__).parents[1] / "src" / "nanoagent"
 
 ALLOWED_IMPORTS = {
+    "adapters": {"adapters"},
     "core": {"core"},
     "inference": {"inference"},
     "runtime": {"core", "extensions", "inference", "runtime", "tools"},
