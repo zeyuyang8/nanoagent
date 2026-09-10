@@ -11,7 +11,8 @@ profiles:
     model: anthropic/claude-sonnet-4
     harness:
       type: pi
-      command: [node, packages/pi-runner/dist/index.js]
+      # Required when OpenRouter is reachable only through HTTP(S)_PROXY.
+      command: [node, --use-env-proxy, packages/pi-runner/dist/index.js]
       cwd: null
       options:
         provider: openrouter

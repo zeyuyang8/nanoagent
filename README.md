@@ -128,7 +128,7 @@ profiles:
     model: deepseek/deepseek-v4-flash-0731
     harness:
       type: pi
-      command: [node, packages/pi-runner/dist/index.js]
+      command: [node, --use-env-proxy, packages/pi-runner/dist/index.js]
       cwd: null
       options: {provider: openrouter, api_key_env: OPENROUTER_API_KEY}
     model_overrides: {}
@@ -141,7 +141,9 @@ pip install "nanoagent[web,hermes]"
 ```
 
 PI runs in Node, so install its companion package beside the server. The checkout config above
-calls its built entry point directly and does not require a global npm link:
+calls its built entry point directly and does not require a global npm link. The
+`--use-env-proxy` flag makes Node's fetch honor `HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY` when
+the server runs on a proxy-only network:
 
 ```bash
 cd packages/pi-runner && npm install

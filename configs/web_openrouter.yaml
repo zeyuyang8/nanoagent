@@ -30,7 +30,9 @@ profiles:
       type: pi
       # Use the companion package from this checkout instead of relying on a
       # globally linked npm executable.
-      command: [node, packages/pi-runner/dist/index.js]
+      # Node's fetch only honors HTTP(S)_PROXY when environment-proxy support
+      # is enabled. This keeps PI working on proxy-only networks.
+      command: [node, --use-env-proxy, packages/pi-runner/dist/index.js]
       cwd: null
       options:
         provider: openrouter
