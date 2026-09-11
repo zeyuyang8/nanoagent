@@ -43,6 +43,10 @@ nanoagent run harness_cfg=myharness.yaml task="list the python files" output=run
 nanoagent run harness_cfg=myharness.yaml batch_cfg=mybatch.yaml \
     tasks=mytasks.jsonl output=expdir/batch
 
+# a named benchmark against a named LLM+harness profile
+nanoagent benchmark run benchmark_cfg=configs/benchmark_openrouter.yaml \
+    benchmark=arithmetic-example profile=native-openrouter
+
 # an interactive session over the same loop (confirm / yolo / shell modes, branching transcript)
 nanoagent chat chat_cfg=mychat.yaml
 
@@ -161,6 +165,57 @@ Third-party adapters use `nanoagent.runner.v1`: one JSON request line on stdin a
 `delta`, `tool`, `step`, then `done` or `error` JSON lines on stdout. Diagnostic logs belong on
 stderr. NanoAgent starts adapters without a shell, enforces its own timeout/output limits, and
 terminates the child when the caller cancels or disconnects.
+
+### Benchmarks
+
+`nanoagent benchmark` keeps three concerns independent:
+
+- a **profile** selects the LLM and harness;
+- a **benchmark adapter** owns cases, private gold data, scoring, and aggregation;
+- the benchmark engine owns selection, concurrency, timeout, resume, and artifacts.
+
+The included exact-match JSONL adapter accepts rows shaped as
+`{"id", "input", "expected", "metadata"}`. `expected` remains scorer-side and is never included
+in the runner request or public case metadata. Run the included example with:
+
+```bash
+export OPENROUTER_API_KEY=...
+nanoagent benchmark list benchmark_cfg=configs/benchmark_openrouter.yaml
+nanoagent benchmark run benchmark_cfg=configs/benchmark_openrouter.yaml
+```
+
+A benchmark output directory is a stable, machine-readable bundle:
+
+```text
+run.json                 resolved benchmark/profile identity and dataset fingerprint
+results.jsonl            one `nanoagent.benchmark.result.v1` row per case
+summary.json             aggregate metrics, counts, usage, and cost
+trajectories/*.benchmark.json
+```
+
+Re-running the same command resumes completed case IDs. NanoAgent refuses to append to an output
+directory whose benchmark version, dataset fingerprint, model, or harness differs. Set
+`redo=true` to intentionally replace its ledger and summary.
+
+Custom Python benchmarks set `adapter.type: python` and name a module or `.py` file in
+`adapter.code`. That module defines exactly one subclass of
+`nanoagent.benchmark.protocol.BaseBenchmarkAdapter`; it receives the benchmark name, label,
+version, primary metric, and the operator-owned `adapter.options`. Implement `cases()` and
+`score()` and override `prepare()` or `aggregate()` only when needed.
+
+Custom harnesses use the existing `nanoagent.runner.v1` JSONL contract:
+
+```yaml
+harness:
+  type: custom
+  command: [my-harness-runner]
+  cwd: null
+  options:
+    capabilities: {streaming: true, usage: true}
+```
+
+The benchmark name and profile name are configuration values, never arbitrary executable input.
+This makes the same registry safe to expose through the web service later.
 
 Any leaf of a config can be overridden inline on any command:
 

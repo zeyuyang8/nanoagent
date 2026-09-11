@@ -169,6 +169,7 @@ def _run(argv: list[str]) -> int:
 # Sibling subcommands delegate to their own module's ``main()``; ``run`` is handled here.
 # Held as module paths (not imports) so each loads lazily — ``browse`` never pulls openai.
 _DELEGATES = {
+    "benchmark": "nanoagent.cli.benchmark",
     "chat": "nanoagent.cli.repl.app",
     "browse": "nanoagent.cli.repl.browser",
     "web": "nanoagent.web.cli",
@@ -176,7 +177,7 @@ _DELEGATES = {
     # as its own console script, `mgen` (see nanoagent.cli.mgen for why it is the exception).
     "mgen": "nanoagent.cli.mgen",
 }
-_USAGE = "usage: nanoagent {run|chat|browse|mgen|web} [args...]"
+_USAGE = "usage: nanoagent {run|benchmark|chat|browse|mgen|web} [args...]"
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -51,12 +51,37 @@ def test_external_harness_uses_default_or_explicit_command() -> None:
 
 
 def test_harness_config_rejects_invalid_values() -> None:
-    with pytest.raises(ValueError, match="native, hermes, or pi"):
+    with pytest.raises(ValueError, match="native, hermes, pi, or custom"):
         HarnessConfig(type="unknown", command=None, cwd=None, options={})
     with pytest.raises(ValueError, match="must be null"):
         HarnessConfig(type="native", command=["agent"], cwd=None, options={})
     with pytest.raises(ValueError, match="non-empty list"):
         HarnessConfig(type="pi", command=[], cwd=None, options={})
+    with pytest.raises(ValueError, match="must be set"):
+        HarnessConfig(type="custom", command=None, cwd=None, options={})
+
+
+def test_custom_harness_uses_runner_protocol_and_declared_capabilities() -> None:
+    cfg = config()
+    runner = build_runner(
+        cfg,
+        HarnessProfileConfig(
+            label="Custom",
+            model="test",
+            harness=HarnessConfig(
+                type="custom",
+                command=["my-runner"],
+                cwd=None,
+                options={"capabilities": {"streaming": True}, "setting": "value"},
+            ),
+            model_overrides={},
+        ),
+    )
+
+    assert isinstance(runner, SubprocessRunner)
+    assert runner.command == ("my-runner",)
+    assert runner.capabilities.streaming is True
+    assert runner.options == {"setting": "value", "model": "test"}
 
 
 def test_agent_factory_is_only_for_native_harness() -> None:

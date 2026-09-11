@@ -172,14 +172,18 @@ class HarnessConfig:
     options: dict[str, Any] = MISSING
 
     def __post_init__(self) -> None:
-        if self.type not in {MISSING, "native", "hermes", "pi"}:
-            raise ValueError(f"harness.type must be native, hermes, or pi; got {self.type!r}")
+        if self.type not in {MISSING, "native", "hermes", "pi", "custom"}:
+            raise ValueError(
+                f"harness.type must be native, hermes, pi, or custom; got {self.type!r}"
+            )
         if isinstance(self.command, list) and (
             not self.command or any(not isinstance(part, str) or not part for part in self.command)
         ):
             raise ValueError("harness.command must be null or a non-empty list of strings")
         if self.type == "native" and self.command is not None:
             raise ValueError("harness.command must be null for the native harness")
+        if self.type == "custom" and not isinstance(self.command, list):
+            raise ValueError("harness.command must be set for a custom harness")
 
 
 @dataclass
@@ -203,6 +207,74 @@ class HarnessProfileConfig:
             and self.model_overrides
         ):
             raise ValueError("model_overrides are only valid for native harness profiles")
+
+
+@dataclass
+class BenchmarkAdapterConfig:
+    """How a named benchmark loads cases and scores runner results."""
+
+    type: str = MISSING
+    # Python adapters name a module or .py file. Built-in adapters set this to null.
+    code: str | None = MISSING
+    options: dict[str, Any] = MISSING
+
+    def __post_init__(self) -> None:
+        if self.type not in {MISSING, "jsonl_exact_match", "python"}:
+            raise ValueError(
+                "benchmark adapter type must be jsonl_exact_match or python; "
+                f"got {self.type!r}"
+            )
+        if self.type == "python" and not self.code:
+            raise ValueError("python benchmark adapter requires code")
+        if self.type == "jsonl_exact_match" and self.code is not None:
+            raise ValueError("jsonl_exact_match benchmark adapter code must be null")
+
+
+@dataclass
+class BenchmarkDefinitionConfig:
+    """One benchmark name in the operator-owned registry."""
+
+    label: str = MISSING
+    version: str = MISSING
+    primary_metric: str = MISSING
+    adapter: BenchmarkAdapterConfig = field(default_factory=BenchmarkAdapterConfig)
+
+    def __post_init__(self) -> None:
+        for name in ("label", "version", "primary_metric"):
+            value = getattr(self, name)
+            if isinstance(value, str) and not value.strip():
+                raise ValueError(f"benchmark {name} must be non-empty")
+
+
+@dataclass
+class BenchmarkRunConfig(AgentDefinitionConfig):
+    """One named benchmark evaluated with one named LLM+harness profile."""
+
+    profiles: dict[str, HarnessProfileConfig] = MISSING
+    benchmarks: dict[str, BenchmarkDefinitionConfig] = MISSING
+    profile: str = MISSING
+    benchmark: str = MISSING
+    output: str = MISSING
+    concurrency: int = MISSING
+    filter: str = MISSING
+    slice: str = MISSING
+    shuffle: bool = MISSING
+    redo: bool = MISSING
+    timeout: float | None = MISSING
+
+    def __post_init__(self) -> None:
+        if isinstance(self.concurrency, int) and self.concurrency < 1:
+            raise ValueError("benchmark concurrency must be >= 1")
+        if isinstance(self.timeout, (int, float)) and self.timeout <= 0:
+            raise ValueError("benchmark timeout must be > 0 or null")
+        if isinstance(self.profiles, dict) and isinstance(self.profile, str):
+            if self.profile not in self.profiles:
+                raise ValueError(f"benchmark profile {self.profile!r} is not configured")
+        if isinstance(self.benchmarks, dict) and isinstance(self.benchmark, str):
+            if self.benchmark not in self.benchmarks:
+                raise ValueError(f"benchmark {self.benchmark!r} is not configured")
+        if isinstance(self.output, str) and not self.output.strip():
+            raise ValueError("benchmark output must be non-empty")
 
 
 @dataclass

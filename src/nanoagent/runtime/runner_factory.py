@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, fields, replace
+import hashlib
+import json
+from dataclasses import asdict, dataclass, fields, replace
 from typing import Any
 
 from nanoagent.runtime.config import AgentDefinitionConfig, HarnessProfileConfig, ModelConfig
@@ -23,6 +25,34 @@ _CAPABILITIES = {
     ),
 }
 
+_SECRET_FIELDS = {"api_key", "api_token", "client_secret", "password", "token"}
+
+
+def _fingerprint_payload(value: Any) -> Any:
+    """Remove credentials before hashing a reproducibility identity."""
+    if isinstance(value, dict):
+        return {
+            key: "<redacted>" if key.lower() in _SECRET_FIELDS else _fingerprint_payload(child)
+            for key, child in value.items()
+        }
+    if isinstance(value, list):
+        return [_fingerprint_payload(child) for child in value]
+    return value
+
+
+def _custom_capabilities(options: dict[str, Any]) -> tuple[RunnerCapabilities, dict[str, Any]]:
+    clean = dict(options)
+    declared = clean.pop("capabilities", {})
+    if not isinstance(declared, dict):
+        raise ValueError("custom harness options.capabilities must be an object")
+    allowed = set(RunnerCapabilities.__dataclass_fields__)
+    unknown = sorted(set(declared) - allowed)
+    if unknown:
+        raise ValueError(f"unknown custom harness capabilities: {', '.join(unknown)}")
+    if any(not isinstance(value, bool) for value in declared.values()):
+        raise ValueError("custom harness capabilities must be booleans")
+    return RunnerCapabilities(**declared), clean
+
 
 @dataclass(frozen=True)
 class RunnerProfile:
@@ -31,6 +61,7 @@ class RunnerProfile:
     harness: str
     model: str
     runner: Runner
+    configuration_fingerprint: str | None = None
 
     def public(self) -> dict[str, Any]:
         availability = getattr(self.runner, "availability", lambda: (True, None))
@@ -63,6 +94,13 @@ class RunnerRegistry:
         agent_factory: AgentFactory | None = None,
     ) -> RunnerRegistry:
         built: dict[str, RunnerProfile] = {}
+        definition = AgentDefinitionConfig(
+            model=cfg.model,
+            agent=cfg.agent,
+            tools=cfg.tools,
+            tools_dir=cfg.tools_dir,
+            allowed_tools=cfg.allowed_tools,
+        )
         for profile_id, profile_cfg in profiles.items():
             runner = build_runner(
                 cfg,
@@ -75,6 +113,16 @@ class RunnerRegistry:
                 harness=profile_cfg.harness.type,
                 model=profile_cfg.model,
                 runner=runner,
+                configuration_fingerprint=hashlib.sha256(
+                    json.dumps(
+                        _fingerprint_payload(
+                            {"definition": asdict(definition), "profile": asdict(profile_cfg)}
+                        ),
+                        sort_keys=True,
+                        separators=(",", ":"),
+                        default=str,
+                    ).encode()
+                ).hexdigest(),
             )
         return cls(built, default_profile)
 
@@ -139,10 +187,14 @@ def build_runner(
     if agent_factory is not None:
         raise ValueError("agent_factory can only be used with a native default profile")
     command = harness.command or list(_DEFAULT_COMMANDS[harness.type])
+    capabilities = _CAPABILITIES.get(harness.type, RunnerCapabilities())
+    options = dict(harness.options)
+    if harness.type == "custom":
+        capabilities, options = _custom_capabilities(options)
     return SubprocessRunner(
         harness.type,
         command,
         cwd=harness.cwd,
-        options={**harness.options, "model": profile.model},
-        capabilities=_CAPABILITIES[harness.type],
+        options={**options, "model": profile.model},
+        capabilities=capabilities,
     )
